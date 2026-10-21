@@ -184,7 +184,7 @@ export function SkirmishLobby({
         <>
           {!guestConnected && (
             <p className="lobby-stay">
-              Stay on this screen until the other player is in. Switching apps can close the room. They can type the code.
+              You can switch apps to send this link, then come back. The other player should open it after you are back on Roadkeep.
             </p>
           )}
           {phone && !relayReady && (

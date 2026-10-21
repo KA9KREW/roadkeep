@@ -4,7 +4,7 @@ import type { GameRenderer } from "../game/render3d";
 import type { GameSim } from "../game/sim";
 import { RELAY_STATUS } from "./ice";
 import { createRoomId, inviteLink, parseRoomInput, type NetMsg } from "./protocol";
-import { SkirmishLink } from "./skirmish";
+import { ROOM_OPEN_STATUS, SkirmishLink } from "./skirmish";
 
 const DEFAULT_MAP = skirmishMaps()[0].id;
 
@@ -191,7 +191,10 @@ export function useSkirmish(sim: GameSim, rendererRef: RefObject<GameRenderer | 
             ...s,
             roomId: id,
             invite: inviteLink(id),
-            status: s.status === RELAY_STATUS || s.status.startsWith("Reopening") ? s.status : "Connecting",
+            status:
+              s.status === RELAY_STATUS || s.status === ROOM_OPEN_STATUS || s.status.startsWith("Reopening")
+                ? s.status
+                : "Connecting",
           }));
         },
         onConnected: () => {
