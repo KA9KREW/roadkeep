@@ -8,7 +8,7 @@
  *   wrangler secret put TURN_KEY_API_TOKEN
  * Point the game's VITE_TURN_MINT at the workers.dev URL.
  */
-const TTL_SECONDS = 6 * 60 * 60;
+const TTL_SECONDS = 24 * 60 * 60;
 
 function allowedOrigin(origin) {
   if (!origin) return "";
