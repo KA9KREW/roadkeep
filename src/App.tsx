@@ -1242,15 +1242,18 @@ export default function App() {
               hostConnected={skirmish.lobby.hostConnected}
               guestConnected={skirmish.lobby.guestConnected}
               invite={skirmish.lobby.invite}
+              code={skirmish.lobby.roomId}
               joinDraft={skirmish.lobby.joinDraft}
               onJoinDraft={skirmish.setJoinDraft}
               status={skirmish.lobby.status}
               link={skirmish.lobby.link}
               copied={skirmish.lobby.copied}
+              relayReady={Boolean(import.meta.env.VITE_TURN_MINT)}
               canStart={skirmish.lobby.role === "host" && skirmish.lobby.guestConnected}
               onHost={skirmish.hostMatch}
               onJoin={() => skirmish.joinMatch()}
               onCopy={() => void skirmish.copyInvite()}
+              onShare={() => void skirmish.shareInvite()}
               onStart={() => {
                 afterPortalBreak(() => {
                   skirmish.startSkirmish();
@@ -1269,8 +1272,10 @@ export default function App() {
               {skirmish.lobby.link === "down"
                 ? "Link lost"
                 : skirmish.lobby.pingMs != null
-                  ? `Link ${skirmish.lobby.pingMs} ms`
-                  : "Link …"}
+                  ? `Link ${skirmish.lobby.pingMs} ms${skirmish.lobby.path ? ` · ${skirmish.lobby.path}` : ""}`
+                  : skirmish.lobby.path
+                    ? `Link · ${skirmish.lobby.path}`
+                    : "Link …"}
             </div>
           )}
           {skirmish.lobby.live && ui.phase === "ended" && (
