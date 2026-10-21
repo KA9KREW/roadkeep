@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type RefObject } from "react"
 import { skirmishMap, skirmishMaps } from "../game/map";
 import type { GameRenderer } from "../game/render3d";
 import type { GameSim } from "../game/sim";
+import { RELAY_STATUS } from "./ice";
 import { createRoomId, inviteLink, parseRoomInput, type NetMsg } from "./protocol";
 import { SkirmishLink } from "./skirmish";
 
@@ -24,6 +25,7 @@ export interface LobbyState {
   joinDraft: string;
   copied: boolean;
   pingMs: number | null;
+  path: string;
   link: "off" | "connecting" | "open" | "failed" | "down";
   /** Map the host has chosen for the next rematch. */
   selectedMapId: string;
@@ -61,6 +63,7 @@ const idleLobby = (): LobbyState => ({
   joinDraft: "",
   copied: false,
   pingMs: null,
+  path: "",
   link: "off",
   selectedMapId: DEFAULT_MAP,
 });
@@ -188,7 +191,7 @@ export function useSkirmish(sim: GameSim, rendererRef: RefObject<GameRenderer | 
             ...s,
             roomId: id,
             invite: inviteLink(id),
-            status: s.status === "Connecting through relay" ? s.status : "Connecting",
+            status: s.status === RELAY_STATUS || s.status.startsWith("Reopening") ? s.status : "Connecting",
           }));
         },
         onConnected: () => {
@@ -204,6 +207,13 @@ export function useSkirmish(sim: GameSim, rendererRef: RefObject<GameRenderer | 
         onMessage,
         onStatus: (text) => setLobby((s) => ({ ...s, status: text })),
         onDirectFail: (text) => setLobby((s) => ({ ...s, status: text, link: "failed" })),
+        onPath: (kind) => {
+          setLobby((s) => ({
+            ...s,
+            path: kind,
+            status: s.live ? s.status : `Connected · ${kind}`,
+          }));
+        },
         onReject: warnPicture,
         onDown: (text) => {
           const wasLive = liveRef.current;
@@ -243,6 +253,7 @@ export function useSkirmish(sim: GameSim, rendererRef: RefObject<GameRenderer | 
       joinDraft: "",
       copied: false,
       pingMs: null,
+      path: "",
       link: "connecting",
       selectedMapId: DEFAULT_MAP,
     });
@@ -273,6 +284,7 @@ export function useSkirmish(sim: GameSim, rendererRef: RefObject<GameRenderer | 
         joinDraft: roomId,
         copied: false,
         pingMs: null,
+        path: "",
         link: "connecting",
         selectedMapId: DEFAULT_MAP,
       });
@@ -318,6 +330,16 @@ export function useSkirmish(sim: GameSim, rendererRef: RefObject<GameRenderer | 
     setLobby((s) => ({ ...s, open: false, live: true, link: "open", status: "" }));
   }, [rendererRef, sim]);
 
+  const shareInvite = useCallback(async () => {
+    const invite = lobbyRef.current.invite;
+    if (!invite || !navigator.share) return;
+    try {
+      await navigator.share({ title: "Roadkeep", text: "Join my Roadkeep match", url: invite });
+    } catch {
+      /* the share sheet was dismissed */
+    }
+  }, []);
+
   const copyInvite = useCallback(async () => {
     const invite = lobbyRef.current.invite;
     if (!invite) return;
@@ -336,6 +358,39 @@ export function useSkirmish(sim: GameSim, rendererRef: RefObject<GameRenderer | 
   const setJoinDraft = useCallback((joinDraft: string) => {
     setLobby((s) => ({ ...s, open: true, joinDraft }));
   }, []);
+
+  useEffect(() => {
+    if (!lobby.open) return;
+    let released = false;
+    let sentinel: WakeLockSentinel | null = null;
+    const hold = () => {
+      const locks = navigator.wakeLock;
+      if (!locks || sentinel || released) return;
+      void locks
+        .request("screen")
+        .then((lock) => {
+          if (released) void lock.release();
+          else sentinel = lock;
+        })
+        .catch(() => {
+          /* the browser refused the lock */
+        });
+    };
+    hold();
+    const onVis = () => {
+      if (document.visibilityState !== "visible") {
+        sentinel = null;
+        return;
+      }
+      hold();
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      released = true;
+      document.removeEventListener("visibilitychange", onVis);
+      void sentinel?.release();
+    };
+  }, [lobby.open]);
 
   useEffect(() => {
     const room = new URLSearchParams(window.location.search).get("room");
@@ -364,6 +419,7 @@ export function useSkirmish(sim: GameSim, rendererRef: RefObject<GameRenderer | 
     pickMap,
     rematch,
     copyInvite,
+    shareInvite,
     leave,
   };
 }

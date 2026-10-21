@@ -1,8 +1,10 @@
 import Peer, { type DataConnection, type PeerError } from "peerjs";
 import { createRoomId, asNetMsg, splitWire, WireReassembly, type NetMsg } from "./protocol";
-import { ATTEMPT_MS, iceConfiguration, nextLinkStep } from "./ice";
+import { ATTEMPT_MS, RELAY_STATUS, directAttemptMs, iceConfiguration, mintRelay, nextLinkStep } from "./ice";
 
 const PATH_FAIL = "Could not open a path between the two networks. Try again.";
+const RELAY_BLOCKED = "No relay candidate. The carrier or the relay blocked it.";
+const RELAY_DOWN = "The relay did not answer. Two phones need it, because a direct path cannot open.";
 
 export interface SkirmishEvents {
   onReady: (id: string) => void;
@@ -12,6 +14,7 @@ export interface SkirmishEvents {
   onDirectFail: (text: string) => void;
   onDown: (text: string) => void;
   onReject: () => void;
+  onPath: (kind: string) => void;
 }
 
 export class SkirmishLink {
@@ -23,6 +26,16 @@ export class SkirmishLink {
   private closed = false;
   private stopped = false;
   private relayUsed = false;
+  private minted: RTCIceServer[] | null = null;
+  private directMs = ATTEMPT_MS;
+  private published = false;
+  private starting = false;
+  private brokerDirty = false;
+  private brokerTries = 0;
+  private reclaimTimer = 0;
+  private sawRelay = false;
+  private pathLogged = false;
+  private iceSeen = new Set<DataConnection>();
   private retriedId = false;
   private idRetries = 0;
   private unavailableTries = 0;
@@ -37,7 +50,9 @@ export class SkirmishLink {
   private rejected = false;
   private ignored = new Set<DataConnection>();
 
-  constructor(private events: SkirmishEvents) {}
+  constructor(private events: SkirmishEvents) {
+    if (typeof document !== "undefined") document.addEventListener("visibilitychange", this.onVisible);
+  }
 
   host(roomId: string) {
     this.role = "host";
@@ -79,6 +94,7 @@ export class SkirmishLink {
   close() {
     this.closed = true;
     this.stopped = true;
+    if (typeof document !== "undefined") document.removeEventListener("visibilitychange", this.onVisible);
     this.clearTimers();
     this.dropQuiet();
     try {
@@ -95,12 +111,30 @@ export class SkirmishLink {
     this.closed = false;
     this.stopped = false;
     this.relayUsed = false;
+    this.minted = null;
+    this.directMs = directAttemptMs();
+    this.published = false;
+    this.brokerDirty = false;
+    this.brokerTries = 0;
+    this.sawRelay = false;
+    this.pathLogged = false;
     this.retriedId = false;
     this.idRetries = 0;
     this.unavailableTries = 0;
     this.lostGen = -1;
     this.attemptStarted = Date.now();
     this.events.onStatus("Connecting");
+    void this.openRoom();
+  }
+
+  private async openRoom() {
+    this.starting = true;
+    const minted = await mintRelay();
+    this.starting = false;
+    if (this.closed || this.stopped) return;
+    this.minted = minted;
+    console.info(`[roadkeep] turn mint ${minted ? "ok" : "unavailable"}`);
+    this.attemptStarted = Date.now();
     this.armDeadline();
     this.spawn();
   }
@@ -113,15 +147,25 @@ export class SkirmishLink {
     return this.relayUsed ? 1 : 0;
   }
 
+  private windowMs() {
+    return this.relayUsed ? ATTEMPT_MS : this.directMs;
+  }
+
   private spawn() {
     const relayOnly = this.relayUsed;
     const id = this.role === "host" ? this.roomId : undefined;
-    const peer = this.makePeer(id, iceConfiguration(relayOnly));
+    const peer = this.makePeer(id, iceConfiguration(relayOnly, this.minted));
     peer.on("open", (readyId) => {
       if (this.closed || this.stopped || this.peer !== peer) return;
       this.idRetries = 0;
+      this.brokerTries = 0;
+      this.published = true;
       if (this.role === "host") this.events.onReady(readyId);
       else this.connectGuest();
+    });
+    peer.on("disconnected", () => {
+      if (this.closed || this.stopped || this.opened || this.peer !== peer) return;
+      this.scheduleReclaim();
     });
     if (this.role === "host") peer.on("connection", (conn) => this.accept(conn));
   }
@@ -192,6 +236,8 @@ export class SkirmishLink {
       this.stopped = true;
       this.clearTimers();
       this.events.onConnected();
+      this.watchIce(conn);
+      void this.logSelected(conn);
       this.pingTimer = window.setInterval(() => this.ping(), 2000);
     });
     conn.on("data", (data) => {
@@ -211,6 +257,8 @@ export class SkirmishLink {
     });
     conn.on("iceStateChanged", (state) => {
       if (this.ignored.has(conn) || this.conn !== conn) return;
+      this.watchIce(conn);
+      if (state === "connected" || state === "completed") void this.logSelected(conn);
       if (state === "failed") this.onTransportLost(gen);
     });
     conn.on("error", (err) => {
@@ -237,7 +285,7 @@ export class SkirmishLink {
   private onTransportLost(gen: number) {
     if (this.closed || this.stopped || this.opened || this.lostGen === gen) return;
     this.lostGen = gen;
-    if (this.elapsed() + 50 >= ATTEMPT_MS) {
+    if (this.elapsed() + 50 >= this.windowMs()) {
       this.onDeadline();
       return;
     }
@@ -245,18 +293,21 @@ export class SkirmishLink {
     window.clearTimeout(this.reopenTimer);
     this.reopenTimer = window.setTimeout(() => {
       if (this.closed || this.stopped || this.opened) return;
-      if (this.elapsed() + 50 >= ATTEMPT_MS) this.onDeadline();
+      if (this.elapsed() + 50 >= this.windowMs()) this.onDeadline();
       else this.connectGuest();
     }, 700);
   }
 
   private onDeadline() {
     if (this.closed || this.stopped || this.opened) return;
-    const step = nextLinkStep({
-      opened: this.opened,
-      attempt: this.attemptIndex(),
-      elapsedMs: this.elapsed(),
-    });
+    const step = nextLinkStep(
+      {
+        opened: this.opened,
+        attempt: this.attemptIndex(),
+        elapsedMs: this.elapsed(),
+      },
+      this.windowMs(),
+    );
     if (step === "relay") {
       this.enterRelay();
       return;
@@ -268,19 +319,20 @@ export class SkirmishLink {
   /** Second attempt. nextLinkStep refuses this until the first window has elapsed. */
   private enterRelay() {
     if (this.closed || this.stopped || this.opened || this.relayUsed) return;
-    if (nextLinkStep({ opened: false, attempt: 0, elapsedMs: this.elapsed() }) !== "relay") return;
+    if (nextLinkStep({ opened: false, attempt: 0, elapsedMs: this.elapsed() }, this.directMs) !== "relay") return;
     this.relayUsed = true;
+    this.sawRelay = false;
     this.unavailableTries = 0;
     this.lostGen = -1;
     this.attemptStarted = Date.now();
-    this.events.onStatus("Connecting through relay");
+    this.events.onStatus(RELAY_STATUS);
     const peer = this.peer;
     if (!peer || peer.destroyed) {
       this.armDeadline();
       this.spawn();
       return;
     }
-    peer.options.config = iceConfiguration(true);
+    peer.options.config = iceConfiguration(true, this.minted);
     this.dropQuiet();
     this.armDeadline();
     if (peer.open && this.role === "guest") this.connectGuest();
@@ -290,7 +342,10 @@ export class SkirmishLink {
     if (this.closed || this.opened || this.stopped) return;
     this.stopped = true;
     this.clearTimers();
-    this.events.onDirectFail(PATH_FAIL);
+    console.info(`[roadkeep] ice failed; relay candidate ${this.sawRelay ? "yes" : "no"}; mint ${this.minted ? "yes" : "no"}`);
+    const text =
+      !this.minted && this.relayUsed ? RELAY_DOWN : this.relayUsed && !this.sawRelay ? RELAY_BLOCKED : PATH_FAIL;
+    this.events.onDirectFail(text);
   }
 
   private dropQuiet() {
@@ -336,7 +391,7 @@ export class SkirmishLink {
   private onPeerError(err: PeerError<string>) {
     if (this.closed || this.stopped) return;
     if (err.type === "unavailable-id" && this.role === "host") {
-      if (!this.relayUsed && !this.retriedId) {
+      if (!this.published && !this.retriedId) {
         this.retriedId = true;
         this.roomId = createRoomId();
         this.attemptStarted = Date.now();
@@ -359,7 +414,15 @@ export class SkirmishLink {
       this.noteUnavailable();
       return;
     }
-    if (err.type === "network" || err.type === "server-error" || err.type === "socket-error" || err.type === "disconnected") {
+    if (err.type === "network" || err.type === "socket-error" || err.type === "disconnected") {
+      if (!this.opened) {
+        this.scheduleReclaim();
+        return;
+      }
+      this.events.onStatus("The match broker did not answer. Try again in a moment.");
+      return;
+    }
+    if (err.type === "server-error") {
       this.events.onStatus("The match broker did not answer. Try again in a moment.");
       return;
     }
@@ -389,14 +452,14 @@ export class SkirmishLink {
     window.clearTimeout(this.reopenTimer);
     this.reopenTimer = window.setTimeout(() => {
       if (this.closed || this.stopped || this.opened) return;
-      if (this.elapsed() + 50 >= ATTEMPT_MS) this.onDeadline();
+      if (this.elapsed() + 50 >= this.windowMs()) this.onDeadline();
       else this.connectGuest();
     }, 500);
   }
 
   private armDeadline() {
     window.clearTimeout(this.waitTimer);
-    const remain = Math.max(0, ATTEMPT_MS - this.elapsed());
+    const remain = Math.max(0, this.windowMs() - this.elapsed());
     this.waitTimer = window.setTimeout(() => this.onDeadline(), remain);
   }
 
@@ -408,8 +471,111 @@ export class SkirmishLink {
   private clearTimers() {
     window.clearTimeout(this.waitTimer);
     window.clearInterval(this.pingTimer);
+    window.clearTimeout(this.reclaimTimer);
     this.clearReconnectTimer();
     this.waitTimer = 0;
     this.pingTimer = 0;
+    this.reclaimTimer = 0;
   }
+
+  private onVisible = () => {
+    if (typeof document === "undefined" || document.visibilityState !== "visible") return;
+    if (this.closed || this.stopped || this.opened || this.starting) return;
+    this.attemptStarted = Date.now();
+    this.armDeadline();
+    const peer = this.peer;
+    if (this.brokerDirty || !peer || peer.destroyed || peer.disconnected) {
+      this.brokerDirty = false;
+      this.brokerTries = 0;
+      this.reclaimBroker();
+    }
+  };
+
+  private scheduleReclaim() {
+    if (this.reclaimTimer || this.closed || this.stopped || this.opened) return;
+    this.reclaimTimer = window.setTimeout(() => {
+      this.reclaimTimer = 0;
+      this.reclaimBroker();
+    }, 50);
+  }
+
+  /** The broker socket dies when a phone freezes the tab. Reclaim the same room. */
+  private reclaimBroker() {
+    if (this.closed || this.stopped || this.opened || this.starting) return;
+    if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+      this.brokerDirty = true;
+      return;
+    }
+    if (this.brokerTries >= 6) {
+      this.events.onStatus("The match broker did not answer. Stay on this screen and try again.");
+      return;
+    }
+    this.brokerTries += 1;
+    this.attemptStarted = Date.now();
+    this.armDeadline();
+    this.events.onStatus("Reopening the room. Stay on this screen.");
+    const peer = this.peer;
+    if (peer && !peer.destroyed && peer.disconnected) {
+      try {
+        peer.reconnect();
+        return;
+      } catch {
+        /* the id has to be opened again */
+      }
+    }
+    if (!peer || peer.destroyed) this.spawn();
+  }
+
+  private watchIce(conn: DataConnection) {
+    if (this.iceSeen.has(conn)) return;
+    const pc = conn.peerConnection;
+    if (!pc) return;
+    this.iceSeen.add(conn);
+    pc.addEventListener("icecandidate", (ev) => {
+      const candidate = ev.candidate;
+      if (!candidate) {
+        console.info(`[roadkeep] ice gathering done; relay candidate ${this.sawRelay ? "yes" : "no"}`);
+        return;
+      }
+      if (candidate.type === "relay") this.sawRelay = true;
+      const proto = candidate.protocol ? ` ${candidate.protocol}` : "";
+      console.info(`[roadkeep] ice candidate ${candidate.type}${proto}`);
+    });
+  }
+
+  private async logSelected(conn: DataConnection) {
+    if (this.pathLogged || this.conn !== conn) return;
+    const pc = conn.peerConnection;
+    if (!pc) return;
+    let kind = "unknown";
+    try {
+      kind = selectedCandidateType(await pc.getStats());
+    } catch {
+      return;
+    }
+    if (kind === "unknown") return;
+    this.pathLogged = true;
+    console.info(`[roadkeep] ice path ${kind}`);
+    this.events.onPath(kind);
+  }
+}
+
+function selectedCandidateType(stats: RTCStatsReport) {
+  let selectedId = "";
+  stats.forEach((report) => {
+    if (report.type !== "transport") return;
+    const row = report as RTCStats & { selectedCandidatePairId?: string };
+    if (row.selectedCandidatePairId) selectedId = row.selectedCandidatePairId;
+  });
+  const chosen = selectedId ? stats.get(selectedId) : undefined;
+  let localId = (chosen as { localCandidateId?: string } | undefined)?.localCandidateId;
+  if (!localId) {
+    stats.forEach((report) => {
+      if (report.type !== "candidate-pair") return;
+      const row = report as RTCStats & { nominated?: boolean; state?: string; localCandidateId?: string };
+      if (row.nominated || row.state === "succeeded") localId = row.localCandidateId;
+    });
+  }
+  const local = localId ? (stats.get(localId) as { candidateType?: string } | undefined) : undefined;
+  return local?.candidateType || "unknown";
 }

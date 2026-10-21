@@ -1,3 +1,5 @@
+import { PHONE_ATTEMPT_MS, directAttemptMs } from "../net/ice";
+
 interface SkirmishEndProps {
   result: string;
   role: "host" | "guest" | "idle";
@@ -77,15 +79,18 @@ interface SkirmishLobbyProps {
   hostConnected: boolean;
   guestConnected: boolean;
   invite: string;
+  code: string;
   joinDraft: string;
   onJoinDraft: (value: string) => void;
   status: string;
   link: "off" | "connecting" | "open" | "failed" | "down";
   copied: boolean;
+  relayReady: boolean;
   canStart: boolean;
   onHost: () => void;
   onJoin: () => void;
   onCopy: () => void;
+  onShare: () => void;
   onStart: () => void;
   onLeave: () => void;
 }
@@ -105,18 +110,24 @@ export function SkirmishLobby({
   hostConnected,
   guestConnected,
   invite,
+  code,
   joinDraft,
   onJoinDraft,
   status,
   link,
   copied,
+  relayReady,
   canStart,
   onHost,
   onJoin,
   onCopy,
+  onShare,
   onStart,
   onLeave,
 }: SkirmishLobbyProps) {
+  const canShare = typeof navigator !== "undefined" && typeof navigator.share === "function";
+  const phone = directAttemptMs() === PHONE_ATTEMPT_MS;
+  const shownCode = code.replace(/(.{4})/g, "$1 ").trim();
   return (
     <div className="overlay title-overlay skirmish-lobby">
       <h1>Skirmish</h1>
@@ -171,10 +182,27 @@ export function SkirmishLobby({
 
       {role === "host" && invite && (
         <>
+          {!guestConnected && (
+            <p className="lobby-stay">
+              Stay on this screen until the other player is in. Switching apps can close the room. They can type the code.
+            </p>
+          )}
+          {phone && !relayReady && (
+            <p className="lobby-stay">Two phones need the Cloudflare relay. This build does not have it yet.</p>
+          )}
+          <label className="lobby-label">
+            Code
+            <input className="lobby-field lobby-code" readOnly value={shownCode} onFocus={(ev) => ev.currentTarget.select()} />
+          </label>
           <input className="lobby-field" readOnly value={invite} onFocus={(ev) => ev.currentTarget.select()} />
           <button type="button" className="ghost" onClick={onCopy}>
             {copied ? "Copied" : "Copy invite link"}
           </button>
+          {canShare && (
+            <button type="button" className="ghost" onClick={onShare}>
+              Share invite
+            </button>
+          )}
           <button type="button" className="cta" onClick={onStart} disabled={!canStart}>
             Start
           </button>
