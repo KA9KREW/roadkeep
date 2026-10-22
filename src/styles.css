@@ -14,7 +14,7 @@
   --sab: env(safe-area-inset-bottom, 0px);
   --sal: env(safe-area-inset-left, 0px);
   --panel-w: 340px;
-  font-family: Georgia, "Palatino Linotype", Palatino, serif;
+  font-family: "IM Fell English", Georgia, "Palatino Linotype", Palatino, serif;
   color: var(--ink);
   background: var(--page);
   color-scheme: dark;
@@ -32,18 +32,11 @@ html,
   height: 100%;
 }
 
-html,
 body {
-  overflow: hidden;
   overscroll-behavior: none;
-}
-
-body {
   -webkit-text-size-adjust: 100%;
   -webkit-tap-highlight-color: transparent;
   -webkit-user-select: none;
-  -moz-user-select: none;
-  -ms-user-select: none;
   user-select: none;
 }
 
@@ -51,8 +44,6 @@ input,
 textarea,
 select {
   -webkit-user-select: text;
-  -moz-user-select: text;
-  -ms-user-select: text;
   user-select: text;
 }
 
@@ -243,8 +234,6 @@ button:disabled {
   overflow: hidden;
   touch-action: none;
   -webkit-user-select: none;
-  -moz-user-select: none;
-  -ms-user-select: none;
   user-select: none;
   -webkit-touch-callout: none;
 }
@@ -484,7 +473,7 @@ button:disabled {
   bottom: 12px;
   margin: 0;
   z-index: 4;
-  font-size: 12px;
+  font-size: 10px;
   letter-spacing: 0.04em;
   color: rgba(230, 210, 170, 0.7);
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
@@ -803,7 +792,7 @@ button:disabled {
 .label {
   display: block;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 10px;
   letter-spacing: 0.06em;
 }
 
@@ -1016,7 +1005,7 @@ button:disabled {
 
 .layout-side.is-phone .stat {
   padding: 3px 2px;
-  font-size: 12px;
+  font-size: 10px;
 }
 
 .layout-side.is-phone .value {
@@ -1024,7 +1013,6 @@ button:disabled {
 }
 
 .layout-side.is-phone .hud-controls {
-  display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 4px;
 }
@@ -1033,11 +1021,7 @@ button:disabled {
 .layout-side.is-phone .quality-pick {
   padding: 6px 4px;
   min-height: 44px;
-  font-size: 12px;
-}
-
-.layout-side.is-phone .quality-pick {
-  grid-column: 1 / -1;
+  font-size: 11px;
 }
 
 .layout-side.is-phone .hud .full {
@@ -1049,8 +1033,7 @@ button:disabled {
 }
 
 .layout-side.is-phone .quality-pick select {
-  width: 100%;
-  font-size: 12px;
+  font-size: 11px;
 }
 
 /* ------------------------------------------------------------------ build bar */
@@ -1688,22 +1671,6 @@ button:disabled {
   width: 72px;
   height: 72px;
   border-radius: 18px;
-}
-
-@media (max-height: 520px) {
-  .menu-logo {
-    display: none;
-  }
-
-  .title-overlay {
-    padding-top: 8px !important;
-    gap: 4px;
-  }
-
-  .title-actions .play-main {
-    min-height: 44px;
-    font-size: 18px;
-  }
 }
 
 .layout-side.is-phone .tips {
