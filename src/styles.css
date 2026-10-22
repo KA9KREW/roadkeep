@@ -724,14 +724,6 @@ button:disabled {
   padding: 4px 8px !important;
 }
 
-.stat.intellect .value {
-  color: #e8b86a;
-}
-
-.phase-tag.muted {
-  color: var(--muted);
-}
-
 .foe-brain-tease {
   color: #e8b86a;
   font-size: 13px;
@@ -932,10 +924,6 @@ button:disabled {
 
 .is-phone .hud.compact .short {
   display: inline;
-}
-
-.is-phone .hud.compact .stat.intellect {
-  display: none;
 }
 
 .is-phone .hud.compact .hud-controls button {
