@@ -169,9 +169,6 @@ export function Overlays({
             <button type="button" onClick={() => void copyLink()}>
               Copy link
             </button>
-            <button type="button" onClick={() => openExternal(ITCH_PAGE)}>
-              itch.io
-            </button>
             <button type="button" onClick={() => openExternal(DISCORD_INVITE)}>
               Discord
             </button>
