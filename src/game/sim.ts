@@ -3676,7 +3676,7 @@ export class GameSim {
       yourWood: Math.floor(s.wood[view]),
       foeGold: Math.floor(s.gold[other]),
       foeWood: Math.floor(s.wood[other]),
-      waveLabel: `${Math.min(this.waveCap(), Math.max(1, s.waveIndex || 1))}/${this.waveCap()}`,
+      waveLabel: `${Math.min(this.waveCap(), Math.max(1, s.waveIndex || 1))}`,
       wavePhase: s.wavePhase,
       buildTimer: Math.max(0, s.buildTimer),
       canRush:

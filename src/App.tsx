@@ -36,7 +36,7 @@ const defaultUi: UiSnapshot = {
   yourWood: 80,
   foeGold: 90,
   foeWood: 80,
-  waveLabel: "1/16",
+  waveLabel: "1",
   wavePhase: "build",
   buildTimer: 20,
   canRush: false,
