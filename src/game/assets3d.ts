@@ -78,8 +78,7 @@ interface ModelTemplate {
 }
 
 const cache = new Map<ModelKey, ModelTemplate>();
-const loading = new Map<ModelKey, Promise<void>>();
-let gltfLoader: GLTFLoader | null = null;
+let loadPromise: Promise<void> | null = null;
 
 /**
  * One Kenney atlas shared by every nature tree, log, and mine.
@@ -128,12 +127,9 @@ function uvsFitAtlas(geo: THREE.BufferGeometry) {
   return true;
 }
 
-let colormapTask: Promise<THREE.Texture | null> | null = null;
-
 function loadColormap(): Promise<THREE.Texture | null> {
   if (colormap) return Promise.resolve(colormap);
-  if (colormapTask) return colormapTask;
-  colormapTask = new Promise((resolve) => {
+  return new Promise((resolve) => {
     new THREE.TextureLoader().load(
       asset("models/kenney/Textures/colormap.png"),
       (tex) => {
@@ -155,7 +151,6 @@ function loadColormap(): Promise<THREE.Texture | null> {
       () => resolve(null),
     );
   });
-  return colormapTask;
 }
 
 /** Quality tiers can soften filtering. They must not drop the albedo. */
@@ -423,39 +418,29 @@ function loadKnight(loader: GLTFLoader): Promise<void> {
     );
 }
 
-function sharedLoader() {
-  if (!gltfLoader) gltfLoader = new GLTFLoader();
-  return gltfLoader;
-}
-
-function loadOne(key: ModelKey): Promise<void> {
-  const pending = loading.get(key);
-  if (pending) return pending;
-  const loader = sharedLoader();
-  const task =
-    key === "knight"
-      ? loadKnight(loader).catch(() => undefined)
-      : new Promise<void>((resolve) => {
+export function ensureModelsLoaded(): Promise<void> {
+  if (loadPromise) return loadPromise;
+  loadPromise = (async () => {
+    colormap = await loadColormap();
+    const loader = new GLTFLoader();
+    const keys = Object.keys(URLS) as ModelKey[];
+    await Promise.all(
+      keys.map((key) => {
+        if (key === "knight") return loadKnight(loader).catch(() => undefined);
+        return new Promise<void>((resolve) => {
           loader.load(
             URLS[key],
             (gltf) => {
-              cache.set(key, { root: prep(gltf.scene, key), clips: gltf.animations });
+              const root = prep(gltf.scene, key);
+              cache.set(key, { root, clips: gltf.animations });
               resolve();
             },
             undefined,
             () => resolve(), // soft-fail — procedural fallbacks still work
           );
         });
-  loading.set(key, task);
-  return task;
-}
-
-/**
- * Loads the requested models. The match only needs the log pile; pass a list
- * from the model preview when comparing the rest. Unrequested files stay out
- * of the initial download.
- */
-export function ensureModelsLoaded(keys?: readonly ModelKey[]): Promise<void> {
-  const list = keys ?? (Object.keys(URLS) as ModelKey[]);
-  return loadColormap().then(() => Promise.all(list.map((key) => loadOne(key).catch(() => undefined)))).then(() => undefined);
+      }),
+    );
+  })();
+  return loadPromise;
 }

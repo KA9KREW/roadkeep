@@ -98,9 +98,6 @@ export function detectQualityTier(): QualityTier {
     if (cores <= 4 || (memory > 0 && memory <= 3)) return "low";
     return "medium";
   }
-  // Chromebooks in this audience are often 4GB. CrazyGames turns the game off
-  // on Chromium OS when that device cannot keep a steady frame rate.
-  if (/CrOS/i.test(ua)) return "low";
   if (cores <= 4 || (memory > 0 && memory <= 4)) return "medium";
   return "high";
 }
@@ -316,11 +313,9 @@ export class GameRenderer {
     this.buildSky();
     this.fitCamera();
     this.applyTier(this.tier, false);
-    // The battlefield is procedural except the wood-node log pile. Loading the
-    // rest of the catalogue here kept the first match waiting on unused files.
-    void ensureModelsLoaded(["kLogs"]).then(() => {
+    void ensureModelsLoaded().then(() => {
+      // Force one remesh pass so trees and props pick up loaded models.
       this.lastMapId = "";
-      this.forgetPrefix("node-");
     });
   }
 
@@ -988,15 +983,6 @@ export class GameRenderer {
       h = Math.imul(h, 16777619);
     }
     return h >>> 0;
-  }
-
-  private forgetPrefix(prefix: string) {
-    for (const key of [...this.entityMap.keys()]) {
-      if (!key.startsWith(prefix)) continue;
-      const obj = this.entityMap.get(key);
-      if (obj) this.dynamicRoot.remove(obj);
-      this.entityMap.delete(key);
-    }
   }
 
   private ensure(key: EntityKey, factory: () => THREE.Object3D) {
