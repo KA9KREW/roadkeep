@@ -3718,6 +3718,8 @@ export class GameSim {
       keepXp: meta.xp,
       keepXpNext: xpForNextLevel(meta.level),
       keepXpPct: xpProgress(meta.xp, meta.level),
+      playerWins: meta.wins,
+      playerLosses: Math.max(0, meta.matches - meta.wins),
       endReason,
       lastXpGain: s.lastXpGain,
       stats: {

@@ -71,6 +71,8 @@ const defaultUi: UiSnapshot = {
   keepXp: 0,
   keepXpNext: 40,
   keepXpPct: 0,
+  playerWins: 0,
+  playerLosses: 0,
   endReason: "",
   lastXpGain: 0,
   stats: { slain: 0, goldEarned: 0, waves: 0, yourKeep: 100, foeKeep: 100 },

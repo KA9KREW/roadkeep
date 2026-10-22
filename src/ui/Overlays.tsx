@@ -74,6 +74,7 @@ export function Overlays({
   const [shareNote, setShareNote] = useState("");
   const [arcadeOpen, setArcadeOpen] = useState(false);
   const roads = laneCount(ui.mapSeed);
+  const playerRecord = `Your record · ${ui.playerWins}W / ${ui.playerLosses}L`;
 
   useEffect(() => {
     if (!shareNote) return;
@@ -116,10 +117,7 @@ export function Overlays({
                 Scout new terrain
               </button>
 
-              <p className="foe-brain-tease">
-                Foe intellect {ui.foeIntellect}
-                {ui.foeGames > 0 ? ` · ${ui.foeWins}W / ${ui.foeGames} games learned` : " · virgin Q-table"}
-              </p>
+              <p className="foe-brain-tease">{playerRecord}</p>
 
               <div className="title-actions">
                 <button type="button" className="cta" onClick={onStart}>
@@ -132,10 +130,7 @@ export function Overlays({
             </>
           ) : (
             <>
-              <p className="foe-brain-tease">
-                Foe intellect {ui.foeIntellect}
-                {ui.foeGames > 0 ? ` · ${ui.foeWins}W / ${ui.foeGames} games learned` : " · virgin Q-table"}
-              </p>
+              <p className="foe-brain-tease">{playerRecord}</p>
 
               <ul className="tips">
                 <li>Beat a nation that fields one unit, and that unit joins your muster</li>
