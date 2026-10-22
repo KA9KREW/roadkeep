@@ -22,7 +22,6 @@ export function Hud({ ui, compact, quality, onQuality, onPause, onSpeed, onSound
       : ui.wavePhase === "spawning"
         ? "Spawning"
         : "Fighting";
-  const explorePct = Math.round(ui.foeExplore * 100);
   const qualityLabel =
     quality.setting === "auto" ? `Auto · ${quality.tier}` : quality.setting[0].toUpperCase() + quality.setting.slice(1);
 
@@ -56,23 +55,17 @@ export function Hud({ ui, compact, quality, onQuality, onPause, onSpeed, onSound
           <span className="phase-tag">{phaseLabel}</span>
         </div>
         <div className="stat">
-          <span className="label">FOE HP</span>
+          <span className="label">ENEMY HP</span>
           <span className="value">{ui.foeHp}</span>
         </div>
-        {!ui.pvp && (
-          <div className="stat intellect">
-            <span className="label">FOE IQ</span>
-            <span className="value">{ui.foeIntellect}</span>
-            <span className="phase-tag muted">
-              {ui.foeWins}W/{ui.foeGames}G · ε{explorePct}%
-            </span>
-          </div>
-        )}
+        <div className="stat">
+          <span className="label">KEEP LV</span>
+          <span className="value">{ui.keepLevel}</span>
+        </div>
       </div>
       <div className="hud-xp-row">
         <div className="stat keep-xp-stat">
-          <span className="label">KEEP LV {ui.keepLevel}</span>
-          <div className="bar xp">
+          <div className="bar xp" role="progressbar" aria-label="Keep XP" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(xpPct * 100)}>
             <div className="fill" style={{ width: `${xpPct * 100}%` }} />
           </div>
         </div>
