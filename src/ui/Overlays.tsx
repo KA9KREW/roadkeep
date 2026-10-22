@@ -107,11 +107,11 @@ export function Overlays({
           <p className="keep-lvl">
             Keep Level {ui.keepLevel} · XP {ui.keepXp}/{ui.keepXpNext}
           </p>
-          <p>Every keep level forges a new battlefield. The Ten Marches unlock the units you can muster.</p>
+          <p className="menu-lead">Every keep level forges a new battlefield. The Ten Marches unlock the units you can muster.</p>
 
           {arcadeOpen ? (
             <>
-              <div className="map-card selected campaign-map">
+              <div className="map-card selected map-brief">
                 <strong>{ui.mapName}</strong>
                 <span>{ui.mapTagline}</span>
                 <span className="map-meta">
