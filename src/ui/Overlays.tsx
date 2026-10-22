@@ -5,10 +5,6 @@ import type { UiSnapshot } from "../game/types";
 const ITCH_PAGE = "https://ka9krew.itch.io/roadkeep";
 const DISCORD_INVITE = "https://discord.gg/FGbUfaxy8v";
 
-function shareText(url: string) {
-  return `Play Roadkeep with me: ${url} — versus AI, or Skirmish and I'll send an invite link. Discord: ${DISCORD_INVITE}`;
-}
-
 function copyWithSelection(text: string) {
   try {
     const area = document.createElement("textarea");
@@ -89,13 +85,6 @@ export function Overlays({
     if (ok) setShareNote("Link copied");
   };
 
-  const shareOnX = () => {
-    const intent = new URL("https://twitter.com/intent/tweet");
-    intent.searchParams.set("text", shareText(ITCH_PAGE));
-    intent.searchParams.set("url", ITCH_PAGE);
-    openExternal(intent.href);
-  };
-
   return (
     <>
       {ui.phase === "title" && !hideTitle && (
@@ -171,9 +160,6 @@ export function Overlays({
             </button>
             <button type="button" onClick={() => openExternal(DISCORD_INVITE)}>
               Discord
-            </button>
-            <button type="button" onClick={shareOnX}>
-              X
             </button>
           </div>
           {shareNote ? (
