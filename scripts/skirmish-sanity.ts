@@ -486,6 +486,54 @@ campaign.startMatch();
 assert(campaign.getMatchMode() === "ai", "versus AI stays versus AI");
 assert(campaign.getState().mapId === campaignId, "versus AI keeps its current map");
 
+const atWork = (v: { state: string; targetNodeId?: string }) =>
+  (v.state === "toNode" || v.state === "toKeep") && !!v.targetNodeId;
+const stillIdle = (v: { state: string; targetNodeId?: string }) => v.state === "idle" && !v.targetNodeId;
+
+const workGuest = new GameSim();
+workGuest.setMatchMode("pvp");
+workGuest.setLocalTeam("foe");
+workGuest.startMatch();
+const workOrders: RemoteOrder[] = [];
+workGuest.setOrderSink((order) => workOrders.push(order));
+workGuest.sendPeonsToWork(workGuest.getLocalTeam());
+const stampedWork = workOrders.find((order) => order.t === "work");
+assert(stampedWork?.t === "work" && stampedWork.team === "foe", "guest work button sends a foe work order");
+if (stampedWork?.t !== "work") throw new Error("work order");
+const parsedWork = asNetMsg(JSON.parse(JSON.stringify({ t: "order", order: stampedWork })));
+assert(
+  parsedWork?.t === "order" && parsedWork.order.t === "work" && parsedWork.order.team === "foe",
+  "guest work order survives the wire",
+);
+if (parsedWork?.t !== "order" || parsedWork.order.t !== "work") throw new Error("parsed work order");
+
+const workHost = new GameSim();
+workHost.setMatchMode("pvp");
+workHost.startMatch();
+const foeWorkers = workHost.getState().villagers.filter((v) => v.team === "foe");
+const youWorkers = workHost.getState().villagers.filter((v) => v.team === "you");
+assert(foeWorkers.length > 0 && foeWorkers.every(stillIdle), "foe peons start idle");
+assert(youWorkers.length > 0 && youWorkers.every(stillIdle), "host peons start idle");
+workHost.applyRemoteOrder(parsedWork.order);
+assert(foeWorkers.every(atWork), "host sends the guest's peons back to work");
+assert(youWorkers.every(stillIdle), "guest work order leaves the host's peons idle");
+workHost.applyRemoteOrder({ t: "work", team: "you" });
+assert(youWorkers.every(stillIdle), "a you-team work order is refused");
+assert(foeWorkers.every(atWork), "a refused work order does not pull guest peons off the job");
+
+const hostButton = new GameSim();
+hostButton.setMatchMode("pvp");
+hostButton.startMatch();
+hostButton.sendPeonsToWork("you");
+assert(
+  hostButton.getState().villagers.filter((v) => v.team === "you").every(atWork),
+  "host work button still sends host peons to work",
+);
+assert(
+  hostButton.getState().villagers.filter((v) => v.team === "foe").every(stillIdle),
+  "host work button does not send guest peons to work",
+);
+
 const layouts = skirmishMaps();
 assert(
   layouts.map((map) => map.name).join("|") === "Night Crossing|Ashen Ford|Copper Bend|Hollow March",

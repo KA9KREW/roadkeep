@@ -180,6 +180,7 @@ const ORDER_TYPES = new Set<RemoteOrder["t"]>([
   "attack",
   "gather",
   "recall",
+  "work",
   "build",
   "train",
   "peon",
