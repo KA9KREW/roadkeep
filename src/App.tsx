@@ -9,7 +9,6 @@ import { BuildBar } from "./ui/BuildBar";
 import { DetailSheet } from "./ui/DetailSheet";
 import { Overlays } from "./ui/Overlays";
 import { CampaignMap } from "./ui/CampaignMap";
-import { ControlCluster, type ClusterAction } from "./ui/ControlCluster";
 import { RadialMenu, type RadialItem } from "./ui/RadialMenu";
 import { useHints } from "./ui/hints";
 import { useLayout } from "./ui/useLayout";
@@ -106,12 +105,6 @@ function fullscreenElement() {
   return d.fullscreenElement ?? d.webkitFullscreenElement ?? null;
 }
 
-function fullscreenSupported() {
-  if (typeof document === "undefined") return false;
-  const el = document.documentElement as FsElement;
-  return Boolean(document.fullscreenEnabled || el.requestFullscreen || el.webkitRequestFullscreen);
-}
-
 interface TapMarker {
   id: number;
   x: number;
@@ -141,7 +134,6 @@ export default function App() {
   const heardMapRef = useRef("");
   const hpRef = useRef(100);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [fsSupported] = useState(fullscreenSupported);
   /** Fullscreen is the default. A browser only allows it from a click or key press, so the first one enters. Leaving fullscreen keeps the windowed view for the rest of the session. */
   const fullscreenWantedRef = useRef(true);
   const [campaignOpen, setCampaignOpen] = useState(false);
@@ -149,17 +141,14 @@ export default function App() {
   const fullscreenRequestRef = useRef<Promise<void> | null>(null);
   const fullscreenTriedRef = useRef(false);
   const dragStartRef = useRef<{ x: number; y: number } | null>(null);
-  const patrolModeRef = useRef(false);
   const selectionBoxRef = useRef<{ left: number; top: number; width: number; height: number } | null>(null);
-  const [patrolMode, setPatrolMode] = useState(false);
   const [selectionBox, setSelectionBox] = useState<{ left: number; top: number; width: number; height: number } | null>(
     null,
   );
   const layout = useLayout();
   const layoutRef = useRef(layout);
   layoutRef.current = layout;
-  const [clusterOpen, setClusterOpen] = useState(false);
-  const [touchDrag, setTouchDrag] = useState<TouchDragMode>(() => {
+  const [touchDrag] = useState<TouchDragMode>(() => {
     try {
       return localStorage.getItem(DRAG_MODE_KEY) === "camera" ? "camera" : "select";
     } catch {
@@ -167,7 +156,6 @@ export default function App() {
     }
   });
   const [quality, setQuality] = useState<QualityInfo>({ setting: "auto", tier: "high", fps: 60 });
-  const [zoomT, setZoomT] = useState(0.39);
   const [tapMarkers, setTapMarkers] = useState<TapMarker[]>([]);
   const tapIdRef = useRef(0);
   const [radial, setRadial] = useState<RadialState | null>(null);
@@ -296,11 +284,6 @@ export default function App() {
     window.setTimeout(() => setTapMarkers((list) => list.filter((m) => m.id !== id)), 760);
   }, []);
 
-  const setPatrol = useCallback((on: boolean) => {
-    patrolModeRef.current = on;
-    setPatrolMode(on);
-  }, []);
-
   const clearLongPress = useCallback(() => {
     if (longPressRef.current) {
       window.clearTimeout(longPressRef.current.timer);
@@ -316,23 +299,21 @@ export default function App() {
         sim.click(hit, world);
         pushTapMarker(localX, localY, "build", "Place");
       } else {
-        const patrol = patrolModeRef.current;
         const hadPeons = state.selectedVillagerIds.length > 0;
-        sim.commandSelected(world, hit, patrol);
+        sim.commandSelected(world, hit, false);
         if (hadPeons) {
           const kind: TapMarker["kind"] =
-            hit?.kind === "node" ? "gather" : hit?.kind === "unit" ? "attack" : patrol ? "patrol" : "move";
-          const label = kind === "gather" ? "Gather" : kind === "attack" ? "Attack" : kind === "patrol" ? "Patrol" : "Move";
+            hit?.kind === "node" ? "gather" : hit?.kind === "unit" ? "attack" : "move";
+          const label = kind === "gather" ? "Gather" : kind === "attack" ? "Attack" : "Move";
           pushTapMarker(localX, localY, kind, label);
         }
       }
-      setPatrol(false);
       beep(hit?.kind === "node" ? 520 : 370, 0.045);
       refreshUi();
     },
     // beep is stable enough for this purpose; it only reads refs/sim.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [sim, pushTapMarker, refreshUi, setPatrol],
+    [sim, pushTapMarker, refreshUi],
   );
 
   useEffect(() => {
@@ -547,7 +528,6 @@ export default function App() {
 
     const onWheel = (ev: WheelEvent) => {
       rendererRef.current?.onWheel(ev);
-      setZoomT(rendererRef.current?.getZoomT() ?? 0.4);
     };
     const onContext = (ev: Event) => ev.preventDefault();
     const stopGesture = (ev: Event) => {
@@ -694,12 +674,7 @@ export default function App() {
       }
       if (ev.key === "Escape") {
         sim.cancelSelection();
-        setPatrol(false);
         setRadial(null);
-        setClusterOpen(false);
-      }
-      if ((ev.key === "p" || ev.key === "P") && sim.getState().selectedVillagerIds.length > 0) {
-        setPatrol(!patrolModeRef.current);
       }
       if (ev.key === "f" || ev.key === "F") void toggleFullscreen();
       if (r) {
@@ -712,13 +687,12 @@ export default function App() {
         if (ev.key === "ArrowRight") r.panBy(-40, 0);
         if (ev.key === "ArrowUp") r.panBy(0, 40);
         if (ev.key === "ArrowDown") r.panBy(0, -40);
-        setZoomT(r.getZoomT());
       }
       refreshUi();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [sim, refreshUi, setPatrol, toggleFullscreen]);
+  }, [sim, refreshUi, toggleFullscreen]);
 
   // Contextual one-shot hints.
   useEffect(() => {
@@ -739,7 +713,7 @@ export default function App() {
         touch ? "touch-order" : "mouse-order",
         touch
           ? "Tap the ground to move, tap a tree or mine to gather, tap a foe to attack. Hold for more orders."
-          : "Right-click the ground to move, a tree or mine to gather, a foe to attack. P then right-click patrols.",
+          : "Right-click the ground to move, a tree or mine to gather, a foe to attack.",
       );
     }
     if (ui.buildSelection && !prev.buildSelection) {
@@ -775,76 +749,6 @@ export default function App() {
   const compactHud = layout.layout === "column" || layout.phone;
   const compactBuild = layout.layout === "column" && layout.phone;
 
-  const clusterActions: ClusterAction[] = [
-    {
-      id: "recall",
-      icon: "🔔",
-      label: "Recall",
-      hint: "Recall all peons to your keep",
-      onPress: () => {
-        sim.callVillagersHome(sim.getLocalTeam());
-        refreshUi();
-        beep(620, 0.12);
-      },
-    },
-    {
-      id: "garrison",
-      icon: "🏰",
-      label: "Garrison",
-      hint: "Garrison peons in the keep (they fire arrows)",
-      disabled: ui.keepGarrisoned >= ui.keepGarrisonMax || ui.phase !== "running",
-      onPress: () => {
-        sim.garrisonVillagers(sim.getLocalTeam());
-        refreshUi();
-        beep(560);
-      },
-    },
-    {
-      id: "patrol",
-      icon: "⇄",
-      label: "Patrol",
-      hint: layout.touch
-        ? "Then tap a destination. They walk the route and fight nearby."
-        : "Then right-click a destination (P). They walk the route and fight nearby.",
-      disabled: ui.selectedPeonCount === 0,
-      active: patrolMode,
-      onPress: () => setPatrol(!patrolModeRef.current),
-    },
-    {
-      id: "barricade",
-      icon: "🪵",
-      label: "Barricade",
-      hint: "Build a barricade across a road",
-      active: ui.buildSelection === "barricade",
-      disabled: ui.phase !== "running",
-      onPress: () => {
-        if (sim.getState().buildSelection === "barricade") sim.cancelSelection();
-        else sim.selectBuild("barricade");
-        refreshUi();
-        beep(280);
-      },
-    },
-    {
-      id: "reset-cam",
-      icon: "⟲",
-      label: "Reset view",
-      hint: "Reset camera (R)",
-      onPress: () => {
-        rendererRef.current?.resetCamera();
-        setZoomT(rendererRef.current?.getZoomT() ?? 0.4);
-      },
-    },
-  ];
-  if (fsSupported) {
-    clusterActions.push({
-      id: "fullscreen",
-      icon: isFullscreen ? "↙" : "⛶",
-      label: isFullscreen ? "Exit full" : "Fullscreen",
-      hint: isFullscreen ? "Exit full screen (F)" : "Full screen (F)",
-      onPress: () => void toggleFullscreen(),
-    });
-  }
-
   const radialItems: RadialItem[] = [];
   if (radial) {
     const state = sim.getState();
@@ -857,17 +761,6 @@ export default function App() {
         label: "Move",
         tone: "move",
         onPress: () => {
-          setPatrol(false);
-          issueOrder(world, null, x, y);
-        },
-      });
-      radialItems.push({
-        id: "patrol",
-        icon: "⇄",
-        label: "Patrol",
-        tone: "patrol",
-        onPress: () => {
-          setPatrol(true);
           issueOrder(world, null, x, y);
         },
       });
@@ -878,7 +771,6 @@ export default function App() {
           label: "Gather",
           tone: "gather",
           onPress: () => {
-            setPatrol(false);
             issueOrder(world, hit, x, y);
           },
         });
@@ -890,7 +782,6 @@ export default function App() {
           label: "Attack",
           tone: "attack",
           onPress: () => {
-            setPatrol(false);
             issueOrder(world, hit, x, y);
           },
         });
@@ -999,65 +890,6 @@ export default function App() {
               {m.label && <em>{m.label}</em>}
             </span>
           ))}
-          {ui.selectedPeonCount > 0 && ui.phase === "running" && !sheetOpen && (
-            <div className="unit-command-bar" role="toolbar" aria-label="Peon orders">
-              <strong>
-                {ui.selectedPeonCount} peon{ui.selectedPeonCount === 1 ? "" : "s"}
-              </strong>
-              <button
-                type="button"
-                className={patrolMode ? "active" : ""}
-                aria-pressed={patrolMode}
-                onClick={() => setPatrol(!patrolModeRef.current)}
-                title={
-                  layout.touch
-                    ? "Then tap a destination. They walk the route and fight nearby."
-                    : "Then right-click a destination (P). They walk the route and fight nearby."
-                }
-              >
-                Patrol
-              </button>
-              <button
-                type="button"
-                title="Hold this spot and fight enemies that come close"
-                onClick={() => {
-                  sim.stopSelectedVillagers();
-                  refreshUi();
-                }}
-              >
-                Stop
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  sim.garrisonVillagers(sim.getLocalTeam());
-                  refreshUi();
-                  beep(560);
-                }}
-                disabled={ui.keepGarrisoned >= ui.keepGarrisonMax}
-                title="Garrison peons in the keep"
-              >
-                Garrison
-              </button>
-              <button
-                type="button"
-                className="ghost dismiss"
-                aria-label="Deselect"
-                onClick={() => {
-                  sim.cancelSelection();
-                  setPatrol(false);
-                  refreshUi();
-                }}
-              >
-                ✕
-              </button>
-            </div>
-          )}
-          {patrolMode && ui.selectedPeonCount > 0 && (
-            <div className="mode-banner" role="status">
-              Patrol: {layout.touch ? "tap" : "right-click"} the destination
-            </div>
-          )}
           {hint && (
             <button type="button" className="hint-toast" onClick={dismissHint} aria-live="polite">
               {hint.text}
@@ -1073,9 +905,8 @@ export default function App() {
               onDismiss={dismissRadial}
             />
           )}
-          {ui.phase === "running" && (
+          {ui.phase === "running" && ui.idlePeonCount > 0 && (
           <div className="banner-rail">
-            {ui.idlePeonCount > 0 && (
               <button
                 type="button"
                 className="pennant work-pennant"
@@ -1090,21 +921,6 @@ export default function App() {
                 To work
                 <span>{ui.idlePeonCount}</span>
               </button>
-            )}
-            <ControlCluster
-              expanded={clusterOpen}
-              onToggle={setClusterOpen}
-              actions={clusterActions}
-              touch={layout.touch}
-              flip={sheetOpen}
-              dragMode={touchDrag}
-              onDragMode={setTouchDrag}
-              zoom={zoomT}
-              onZoom={(t) => {
-                rendererRef.current?.setZoomT(t);
-                setZoomT(t);
-              }}
-            />
           </div>
           )}
           {!layout.touch && (
