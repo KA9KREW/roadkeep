@@ -57,6 +57,7 @@ const TIER_PROFILE: Record<
   high: { dpr: 2.0, shadows: true, shadowMap: 2048, particles: 420, fog: true, pointLights: true, shadowEvery: 1 },
 };
 
+/** Saved graphics choice. With nothing stored, play starts on the high tier. */
 export function loadQualitySetting(): QualitySetting {
   try {
     const v = localStorage.getItem(QUALITY_KEY);
@@ -64,7 +65,7 @@ export function loadQualitySetting(): QualitySetting {
   } catch {
     /* ignore */
   }
-  return "auto";
+  return "high";
 }
 
 export function isTouchDevice() {
@@ -146,7 +147,7 @@ export class GameRenderer {
   private padMaterials = new Map<string, THREE.MeshBasicMaterial>();
   private rangeRingFor = "";
   // Quality
-  private qualitySetting: QualitySetting = "auto";
+  private qualitySetting: QualitySetting = "high";
   private tier: QualityTier = "high";
   private detectedTier: QualityTier = "high";
   private autoDrops = 0;
