@@ -29,7 +29,7 @@ export function Hud({ ui, compact, quality, onQuality, onPause, onSpeed, onSound
     <div className={compact ? "hud compact" : "hud"}>
       <div className="hud-top">
         <div className="stat lives">
-          <span className="label">LIVES</span>
+          <span className="label">HP</span>
           <span className={ui.yourHp <= 80 ? "value danger" : "value"}>{ui.yourHp}</span>
           <div className="bar">
             <div className="fill" style={{ width: `${hpPct * 100}%` }} />
