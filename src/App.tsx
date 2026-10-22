@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./styles.css";
-import { GameRenderer, type QualityInfo, type QualitySetting, type TouchDragMode } from "./game/render3d";
+import { GameRenderer, loadQualitySetting, type QualityInfo, type QualitySetting, type TouchDragMode } from "./game/render3d";
 import { GameSim, hitTest } from "./game/sim";
 import type { BuildingKind, CombatEventKind, RectHit, TrainKind, UiSnapshot } from "./game/types";
 import { BUILD_COST } from "./game/balance";
@@ -134,12 +134,9 @@ export default function App() {
   const heardMapRef = useRef("");
   const hpRef = useRef(100);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  /** Fullscreen is the default. A browser only allows it from a click or key press, so the first one enters. Leaving fullscreen keeps the windowed view for the rest of the session. */
-  const fullscreenWantedRef = useRef(true);
   const [campaignOpen, setCampaignOpen] = useState(false);
   const [triumph, setTriumph] = useState<{ id: number; unlock: string } | null>(null);
   const fullscreenRequestRef = useRef<Promise<void> | null>(null);
-  const fullscreenTriedRef = useRef(false);
   const dragStartRef = useRef<{ x: number; y: number } | null>(null);
   const selectionBoxRef = useRef<{ left: number; top: number; width: number; height: number } | null>(null);
   const [selectionBox, setSelectionBox] = useState<{ left: number; top: number; width: number; height: number } | null>(
@@ -155,7 +152,10 @@ export default function App() {
       return "select";
     }
   });
-  const [quality, setQuality] = useState<QualityInfo>({ setting: "auto", tier: "high", fps: 60 });
+  const [quality, setQuality] = useState<QualityInfo>(() => {
+    const setting = loadQualitySetting();
+    return { setting, tier: setting === "auto" ? "high" : setting, fps: 60 };
+  });
   const [tapMarkers, setTapMarkers] = useState<TapMarker[]>([]);
   const tapIdRef = useRef(0);
   const [radial, setRadial] = useState<RadialState | null>(null);
@@ -168,36 +168,36 @@ export default function App() {
 
   const refreshUi = useCallback(() => setUi(sim.getUiSnapshot()), [sim]);
 
-  const requestFullscreen = useCallback(async () => {
-    if (!fullscreenWantedRef.current || fullscreenElement() || fullscreenRequestRef.current) return;
+  /** Ask for fullscreen during a click. Already fullscreen stays fullscreen. A missing API or a rejection keeps the match going. */
+  const requestFullscreen = useCallback(() => {
+    if (fullscreenElement() || fullscreenRequestRef.current) return;
     const el = pageRef.current as FsElement | null;
     if (!el) return;
-    const task = (async () => {
-      try {
-        if (el.requestFullscreen) await el.requestFullscreen();
-        else await el.webkitRequestFullscreen?.();
-      } catch {
-        /* iOS Safari and some embedded browsers reject — the dvh layout already fills the screen */
-      }
-    })();
-    fullscreenRequestRef.current = task;
+    const request = el.requestFullscreen?.bind(el) ?? el.webkitRequestFullscreen?.bind(el);
+    if (!request) return;
+    let pending: Promise<void>;
     try {
-      await task;
-    } finally {
-      fullscreenRequestRef.current = null;
+      pending = Promise.resolve(request()).then(
+        () => undefined,
+        () => undefined,
+      );
+    } catch {
+      return;
     }
+    fullscreenRequestRef.current = pending;
+    void pending.finally(() => {
+      if (fullscreenRequestRef.current === pending) fullscreenRequestRef.current = null;
+    });
   }, []);
 
   const toggleFullscreen = useCallback(async () => {
     const d = document as FsDocument;
     try {
       if (fullscreenElement()) {
-        fullscreenWantedRef.current = false;
         if (d.exitFullscreen) await d.exitFullscreen();
         else await d.webkitExitFullscreen?.();
       } else {
-        fullscreenWantedRef.current = true;
-        await requestFullscreen();
+        requestFullscreen();
       }
     } catch {
       /* iOS Safari and some embedded browsers reject — the dvh layout already fills the screen */
@@ -590,27 +590,16 @@ export default function App() {
 
   useEffect(() => {
     const onFullscreenChange = () => {
-      const on = Boolean(fullscreenElement());
-      if (!on) fullscreenWantedRef.current = false;
-      setIsFullscreen(on);
+      setIsFullscreen(Boolean(fullscreenElement()));
       requestAnimationFrame(() => rendererRef.current?.resize());
-    };
-    const enter = () => {
-      if (fullscreenTriedRef.current) return;
-      fullscreenTriedRef.current = true;
-      void requestFullscreen();
     };
     document.addEventListener("fullscreenchange", onFullscreenChange);
     document.addEventListener("webkitfullscreenchange", onFullscreenChange);
-    window.addEventListener("pointerdown", enter, true);
-    window.addEventListener("keydown", enter, true);
     return () => {
       document.removeEventListener("fullscreenchange", onFullscreenChange);
       document.removeEventListener("webkitfullscreenchange", onFullscreenChange);
-      window.removeEventListener("pointerdown", enter, true);
-      window.removeEventListener("keydown", enter, true);
     };
-  }, [requestFullscreen]);
+  }, []);
 
   useEffect(() => {
     const prev = phaseRef.current;
@@ -994,6 +983,7 @@ export default function App() {
             }}
             onStart={() => {
               if (skirmish.lobby.open || skirmish.lobby.live) return;
+              requestFullscreen();
               setCampaignOpen(false);
               afterPortalBreak(() => {
                 sim.setMatchMode("ai");
@@ -1023,6 +1013,7 @@ export default function App() {
             }}
             onMarchAgain={() => {
               if (ui.missionId == null) return;
+              requestFullscreen();
               afterPortalBreak(() => {
                 sim.startCampaign(ui.missionId!);
                 setCampaignOpen(false);
@@ -1040,6 +1031,7 @@ export default function App() {
                 setCampaignOpen(false);
               }}
               onMarch={(id) => {
+                requestFullscreen();
                 setTriumph(null);
                 afterPortalBreak(() => {
                   sim.startCampaign(id);
@@ -1073,6 +1065,7 @@ export default function App() {
               onCopy={() => void skirmish.copyInvite()}
               onShare={() => void skirmish.shareInvite()}
               onStart={() => {
+                requestFullscreen();
                 afterPortalBreak(() => {
                   skirmish.startSkirmish();
                   refreshUi();
@@ -1106,6 +1099,7 @@ export default function App() {
               canRematch={skirmish.lobby.role === "host" && skirmish.lobby.link === "open" && skirmish.lobby.guestConnected}
               onPick={skirmish.pickMap}
               onRematch={() => {
+                requestFullscreen();
                 skirmish.rematch();
                 refreshUi();
                 beep(520);
