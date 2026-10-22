@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { laneCount } from "../game/map";
 import type { UiSnapshot } from "../game/types";
+import { MapPreview } from "./MapPreview";
 
 const ITCH_PAGE = "https://ka9krew.itch.io/roadkeep";
 const DISCORD_INVITE = "https://discord.gg/FGbUfaxy8v";
@@ -108,6 +109,7 @@ export function Overlays({
                   {ui.scoutSalt > 0 ? ` · Scout ${ui.scoutSalt}` : ""} · {roads === 1 ? "1 road" : `${roads} roads`} · seed{" "}
                   {ui.mapSeed}
                 </span>
+                <MapPreview seed={ui.mapSeed} />
               </div>
 
               <button type="button" className="ghost reroll-btn" onClick={onRerollMap}>
