@@ -1604,11 +1604,22 @@ button:disabled {
 .title-overlay {
   overflow-y: auto;
   justify-content: flex-start !important;
-  padding-top: 18px !important;
   overscroll-behavior: contain;
+  top: 12px;
+  right: auto;
+  bottom: auto;
+  left: 12px;
+  width: min(400px, calc(100% - 24px));
+  height: auto;
+  max-height: calc(100% - 24px);
+  padding: 14px 14px 10px !important;
+  gap: 6px;
 }
 
-.layout-side .title-overlay,
+.title-overlay > * {
+  flex: 0 0 auto;
+}
+
 .layout-side .overlay {
   max-width: 520px;
   margin: 0 auto;
@@ -1616,24 +1627,43 @@ button:disabled {
   right: 12px;
 }
 
-.layout-side.is-phone .title-overlay {
-  padding: 10px 12px !important;
+.layout-side .title-overlay {
+  margin: 0;
+  left: 12px;
+  right: auto;
+  width: min(380px, 44%);
+  max-width: 400px;
+  max-height: calc(100% - 24px);
+}
+
+.layout-column .title-overlay {
+  top: 8px;
+  left: 8px;
+  right: 8px;
+  width: auto;
+  max-height: calc(100% - 112px);
+}
+
+.layout-side.is-phone .title-overlay,
+.layout-column.is-phone .title-overlay {
+  padding: 8px 10px !important;
   font-size: 13px;
   gap: 4px;
 }
 
-.layout-side.is-phone .title-overlay h1 {
+.is-phone .title-overlay h1 {
   font-size: 20px;
   margin: 0;
 }
 
-.layout-side.is-phone .menu-logo {
-  width: 72px;
-  height: 72px;
-  border-radius: 18px;
+.is-phone .title-overlay .menu-logo {
+  width: 56px;
+  height: 56px;
+  margin-bottom: 0;
+  border-radius: 14px;
 }
 
-.layout-side.is-phone .tips {
+.is-phone .title-overlay .tips {
   display: none;
 }
 
@@ -1641,6 +1671,36 @@ button:disabled {
   margin-top: 6px;
   padding: 10px 14px;
   font-size: 15px;
+}
+
+.title-overlay .title-actions .cta,
+.title-overlay .title-actions .ghost {
+  flex: 1 1 120px;
+  margin-top: 2px;
+}
+
+@media (orientation: landscape) {
+  .layout-column .title-overlay {
+    right: auto;
+    width: min(320px, 48vw);
+    max-height: calc(100% - 16px);
+  }
+}
+
+@media (orientation: landscape) and (max-height: 520px) {
+  .title-overlay {
+    gap: 3px;
+    padding: 6px 8px !important;
+  }
+
+  .title-overlay .menu-lead {
+    display: none;
+  }
+
+  .title-overlay .reroll-btn {
+    margin: 2px 0;
+    padding: 6px 8px;
+  }
 }
 
 .map-pick {
@@ -2567,6 +2627,26 @@ button,
   box-shadow:
     inset 0 0 80px rgba(0, 0, 0, 0.45),
     0 0 0 1px rgba(230, 201, 138, 0.25);
+}
+
+.title-overlay .map-brief {
+  flex: 0 0 auto;
+  width: 100%;
+  height: auto;
+  min-height: 0;
+  overflow: visible;
+  cursor: default;
+  background: #3a4a2e;
+  border: 1px solid #e2c27a;
+  box-shadow: inset 0 0 0 1px rgba(226, 194, 122, 0.35);
+}
+
+.title-overlay .map-brief strong {
+  color: #f6ecd4;
+}
+
+.title-overlay .map-brief .map-meta {
+  color: #d9ccb0 !important;
 }
 
 .campaign-fit {
