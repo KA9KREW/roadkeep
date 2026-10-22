@@ -354,6 +354,9 @@ export interface UiSnapshot {
   keepXp: number;
   keepXpNext: number;
   keepXpPct: number;
+  /** Saved solo career. Losses are finished matches minus wins. */
+  playerWins: number;
+  playerLosses: number;
   endReason: string;
   lastXpGain: number;
   stats: {
