@@ -1,4 +1,3 @@
-import { isCrazyGamesMode } from "../crazyMode";
 import type { QualityInfo, QualitySetting } from "../game/render3d";
 import type { UiSnapshot } from "../game/types";
 
@@ -24,7 +23,6 @@ export function Hud({ ui, compact, quality, onQuality, onPause, onSpeed, onSound
         ? "Spawning"
         : "Fighting";
   const explorePct = Math.round(ui.foeExplore * 100);
-  const plain = isCrazyGamesMode();
   const qualityLabel =
     quality.setting === "auto" ? `Auto · ${quality.tier}` : quality.setting[0].toUpperCase() + quality.setting.slice(1);
 
@@ -63,14 +61,10 @@ export function Hud({ ui, compact, quality, onQuality, onPause, onSpeed, onSound
         </div>
         {!ui.pvp && (
           <div className="stat intellect">
-            <span className="label">{plain ? "SKILL" : "FOE IQ"}</span>
+            <span className="label">FOE IQ</span>
             <span className="value">{ui.foeIntellect}</span>
             <span className="phase-tag muted">
-              {plain
-                ? ui.foeGames > 0
-                  ? `${ui.foeWins} wins · ${ui.foeGames} games`
-                  : "still learning"
-                : `${ui.foeWins}W/${ui.foeGames}G · ε${explorePct}%`}
+              {ui.foeWins}W/{ui.foeGames}G · ε{explorePct}%
             </span>
           </div>
         )}

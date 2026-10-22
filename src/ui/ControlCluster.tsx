@@ -24,8 +24,6 @@ interface ControlClusterProps {
   /** 0 = closest, 1 = furthest. Non-touch only. */
   zoom: number;
   onZoom: (t: number) => void;
-  /** CrazyGames reserves Escape. When false, Escape does not close this menu. */
-  escapeKey?: boolean;
 }
 
 /**
@@ -41,25 +39,24 @@ export function ControlCluster({
   onDragMode,
   zoom,
   onZoom,
-  escapeKey = true,
 }: ControlClusterProps) {
   const rootRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!expanded) return;
     const onKey = (ev: KeyboardEvent) => {
-      if (escapeKey && ev.key === "Escape") onToggle(false);
+      if (ev.key === "Escape") onToggle(false);
     };
     const onDown = (ev: PointerEvent) => {
       if (!rootRef.current?.contains(ev.target as Node)) onToggle(false);
     };
-    if (escapeKey) window.addEventListener("keydown", onKey);
+    window.addEventListener("keydown", onKey);
     window.addEventListener("pointerdown", onDown, true);
     return () => {
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("pointerdown", onDown, true);
     };
-  }, [expanded, escapeKey, onToggle]);
+  }, [expanded, onToggle]);
 
   return (
     <div ref={rootRef} className={`command-banners${expanded ? " open" : ""}${flip ? " flip" : ""}`}>

@@ -69,7 +69,6 @@ import {
   startPadPos,
   villagerStart,
 } from "./map";
-import { isCrazyGamesMode } from "../crazyMode";
 import { foeBrainStats, notifyAiMatchEnd, notifyAiMatchStart, runAiTurn } from "./ai";
 import {
   awardMatchXp,
@@ -241,7 +240,7 @@ export class GameSim {
       time: 0,
       paused: false,
       speed: 1,
-      soundOn: true,
+      soundOn: false,
       audioUnlocked: false,
       keeps: {
         you: {
@@ -510,8 +509,6 @@ export class GameSim {
   /** Reload campaign map for current keep level (+ scout salt). */
   reloadCampaignMap() {
     const meta = loadMeta();
-    const soundOn = this.state.soundOn;
-    const audioUnlocked = this.state.audioUnlocked;
     this.activeMap = getOrCreateCampaignMap(meta.level, meta.scoutSalt);
     this.nextId = 1;
     this.aiTimer = 0;
@@ -524,8 +521,6 @@ export class GameSim {
     this.predicted.clear();
     this.pendingOwnPad = null;
     this.state = this.makeFreshState(this.activeMap);
-    this.state.soundOn = soundOn;
-    this.state.audioUnlocked = audioUnlocked;
     this.state.commandTeam = this.localTeam;
   }
 
@@ -564,11 +559,7 @@ export class GameSim {
     this.poses.clear();
     this.predicted.clear();
     this.pendingOwnPad = null;
-    const soundOn = this.state.soundOn;
-    const audioUnlocked = this.state.audioUnlocked;
     this.state = this.makeFreshState(map);
-    this.state.soundOn = soundOn;
-    this.state.audioUnlocked = audioUnlocked;
     this.state.commandTeam = "you";
     if (mission.mode === "onslaught") this.widenField();
     this.state.phase = "running";
@@ -620,11 +611,7 @@ export class GameSim {
     notifyAiMatchStart();
     const iq = foeBrainStats().intellect;
     this.addToast(`Build phase — ${FIRST_BUILD}s until wave 1`);
-    this.addToast(
-      isCrazyGamesMode()
-        ? `Enemy skill ${iq} — it learns how you play`
-        : `Foe intellect ${iq} — learning your patterns`,
-    );
+    this.addToast(`Foe intellect ${iq} — learning your patterns`);
   }
 
   /**
