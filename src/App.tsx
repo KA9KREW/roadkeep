@@ -16,6 +16,8 @@ import { useLayout } from "./ui/useLayout";
 import { skirmishMaps } from "./game/map";
 import { useSkirmish } from "./net/useSkirmish";
 import { SkirmishEnd, SkirmishLobby } from "./ui/SkirmishLobby";
+import { isCrazyGamesMode } from "./crazyMode";
+import { createMusicBed } from "./game/musicBed";
 import { afterPortalBreak, bindPortalAudio, onMatchEndToMenu, onMatchStart, onReturnToTitle } from "./portal";
 
 const defaultUi: UiSnapshot = {
@@ -28,7 +30,7 @@ const defaultUi: UiSnapshot = {
   scoutSalt: 0,
   paused: false,
   speed: 1,
-  soundOn: false,
+  soundOn: true,
   yourHp: 100,
   foeHp: 100,
   yourMaxHp: 100,
@@ -138,10 +140,13 @@ export default function App() {
   const heardCombatRef = useRef(new Set<number>());
   const heardMapRef = useRef("");
   const hpRef = useRef(100);
+  const crazyModeRef = useRef(isCrazyGamesMode());
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [fsSupported] = useState(fullscreenSupported);
-  /** Fullscreen is the default. A browser only allows it from a click or key press, so the first one enters. Leaving fullscreen keeps the windowed view for the rest of the session. */
-  const fullscreenWantedRef = useRef(true);
+  const [lesson, setLesson] = useState(false);
+  const [audioReady, setAudioReady] = useState(false);
+  /** Fullscreen is the default outside CrazyGames. A browser only allows it from a click or key press, so the first one enters. Leaving fullscreen keeps the windowed view for the rest of the session. */
+  const fullscreenWantedRef = useRef(!crazyModeRef.current);
   const [campaignOpen, setCampaignOpen] = useState(false);
   const [triumph, setTriumph] = useState<{ id: number; unlock: string } | null>(null);
   const fullscreenRequestRef = useRef<Promise<void> | null>(null);
@@ -613,13 +618,19 @@ export default function App() {
       setIsFullscreen(on);
       requestAnimationFrame(() => rendererRef.current?.resize());
     };
+    document.addEventListener("fullscreenchange", onFullscreenChange);
+    document.addEventListener("webkitfullscreenchange", onFullscreenChange);
+    if (crazyModeRef.current) {
+      return () => {
+        document.removeEventListener("fullscreenchange", onFullscreenChange);
+        document.removeEventListener("webkitfullscreenchange", onFullscreenChange);
+      };
+    }
     const enter = () => {
       if (fullscreenTriedRef.current) return;
       fullscreenTriedRef.current = true;
       void requestFullscreen();
     };
-    document.addEventListener("fullscreenchange", onFullscreenChange);
-    document.addEventListener("webkitfullscreenchange", onFullscreenChange);
     window.addEventListener("pointerdown", enter, true);
     window.addEventListener("keydown", enter, true);
     return () => {
@@ -631,13 +642,44 @@ export default function App() {
   }, [requestFullscreen]);
 
   useEffect(() => {
+    const playable = ui.phase === "running" && !ui.paused;
+    if (playable) {
+      onMatchStart();
+      phaseRef.current = ui.phase;
+      return;
+    }
     const prev = phaseRef.current;
     phaseRef.current = ui.phase;
-    if (prev === ui.phase) return;
-    if (ui.phase === "running") onMatchStart();
-    else if (ui.phase === "title" && prev === "ended") onMatchEndToMenu();
-    else if (ui.phase === "title") onReturnToTitle();
-  }, [ui.phase]);
+    if (ui.phase === "title" && prev === "ended") onMatchEndToMenu();
+    else onReturnToTitle();
+  }, [ui.phase, ui.paused]);
+
+  useEffect(() => {
+    const resume = () => {
+      sim.unlockAudio();
+      if (!audioCtxRef.current) audioCtxRef.current = new AudioContext();
+      const ctx = audioCtxRef.current;
+      const mark = () => {
+        if (ctx.state === "running") setAudioReady(true);
+      };
+      if (ctx.state === "suspended") void ctx.resume().then(mark, mark);
+      else mark();
+    };
+    window.addEventListener("click", resume, true);
+    window.addEventListener("touchend", resume, true);
+    return () => {
+      window.removeEventListener("click", resume, true);
+      window.removeEventListener("touchend", resume, true);
+    };
+  }, [sim]);
+
+  useEffect(() => {
+    if (!audioReady || !ui.soundOn || ui.phase !== "running" || ui.paused) return;
+    const ctx = audioCtxRef.current;
+    if (!ctx || ctx.state !== "running") return;
+    const bed = createMusicBed(ctx);
+    return () => bed.stop();
+  }, [audioReady, ui.paused, ui.phase, ui.soundOn]);
 
   useEffect(() => {
     if (ui.phase !== "ended" || !skirmish.lobby.live || skirmish.lobby.role !== "host") return;
@@ -690,7 +732,7 @@ export default function App() {
         ev.preventDefault();
         sim.togglePause();
       }
-      if (ev.key === "Escape") {
+      if (!crazyModeRef.current && ev.key === "Escape") {
         sim.cancelSelection();
         setPatrol(false);
         setRadial(null);
@@ -699,7 +741,7 @@ export default function App() {
       if ((ev.key === "p" || ev.key === "P") && sim.getState().selectedVillagerIds.length > 0) {
         setPatrol(!patrolModeRef.current);
       }
-      if (ev.key === "f" || ev.key === "F") void toggleFullscreen();
+      if (!crazyModeRef.current && (ev.key === "f" || ev.key === "F")) void toggleFullscreen();
       if (r) {
         if (ev.key === "=" || ev.key === "+") r.zoomBy(0.9);
         if (ev.key === "-" || ev.key === "_") r.zoomBy(1.1);
@@ -723,6 +765,8 @@ export default function App() {
     const prev = prevUiRef.current;
     prevUiRef.current = ui;
     const touch = layoutRef.current.touch;
+    if (crazyModeRef.current && ui.phase === "running" && prev.phase !== "running") setLesson(true);
+    if (ui.phase !== "running") setLesson(false);
     if (ui.phase !== "running") return;
     if (prev.phase !== "running") {
       showHint(
@@ -833,7 +877,7 @@ export default function App() {
       },
     },
   ];
-  if (fsSupported) {
+  if (fsSupported && !crazyModeRef.current) {
     clusterActions.push({
       id: "fullscreen",
       icon: isFullscreen ? "↙" : "⛶",
@@ -1061,6 +1105,14 @@ export default function App() {
               {hint.text}
             </button>
           )}
+          {crazyModeRef.current && lesson && ui.phase === "running" && (
+            <aside className="field-lesson" role="note">
+              <p>Train a peon. Place a barricade. Survive the wave.</p>
+              <button type="button" onClick={() => setLesson(false)}>
+                Skip
+              </button>
+            </aside>
+          )}
           {radial && radialItems.length > 0 && (
             <RadialMenu
               x={radial.x}
@@ -1069,6 +1121,7 @@ export default function App() {
               height={stageRect?.height ?? 600}
               items={radialItems}
               onDismiss={dismissRadial}
+              escapeKey={!crazyModeRef.current}
             />
           )}
           {ui.phase === "running" && (
@@ -1102,6 +1155,7 @@ export default function App() {
                 rendererRef.current?.setZoomT(t);
                 setZoomT(t);
               }}
+              escapeKey={!crazyModeRef.current}
             />
           </div>
           )}
