@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { isCrazyGamesMode } from "../crazyMode";
 import { laneCount } from "../game/map";
 import type { UiSnapshot } from "../game/types";
 
@@ -44,6 +45,15 @@ async function copyText(text: string) {
   return legacy;
 }
 
+function foePlain(ui: UiSnapshot, ended = false) {
+  if (ui.foeGames > 0) {
+    return ended
+      ? `Enemy skill ${ui.foeIntellect} · ${ui.foeGames} games played`
+      : `Enemy skill ${ui.foeIntellect} · ${ui.foeWins} wins in ${ui.foeGames} games`;
+  }
+  return `Enemy skill ${ui.foeIntellect} · still learning`;
+}
+
 function openExternal(url: string) {
   const tab = window.open(url, "_blank", "noopener,noreferrer");
   if (tab) tab.opener = null;
@@ -76,6 +86,7 @@ export function Overlays({
 }: OverlaysProps) {
   const [shareNote, setShareNote] = useState("");
   const [arcadeOpen, setArcadeOpen] = useState(false);
+  const plain = isCrazyGamesMode();
   const roads = laneCount(ui.mapSeed);
 
   useEffect(() => {
@@ -109,7 +120,24 @@ export function Overlays({
           </p>
           <p>Every keep level forges a new battlefield. The Ten Marches unlock the units you can muster.</p>
 
-          {arcadeOpen ? (
+          {plain ? (
+            <>
+              <p className="foe-brain-tease">{foePlain(ui)}</p>
+              <div className="title-actions">
+                <button type="button" className="cta play-main" onClick={onStart}>
+                  Play
+                </button>
+              </div>
+              <div className="title-actions is-secondary">
+                <button type="button" className="ghost" onClick={onCampaign}>
+                  Campaign
+                </button>
+                <button type="button" className="ghost" onClick={onSkirmish}>
+                  Multiplayer
+                </button>
+              </div>
+            </>
+          ) : arcadeOpen ? (
             <>
               <div className="map-card selected campaign-map">
                 <strong>{ui.mapName}</strong>
@@ -165,26 +193,43 @@ export function Overlays({
             </>
           )}
 
-          <div className="title-share" role="group" aria-label="Share this game">
-            <button type="button" onClick={() => void copyLink()}>
-              Copy link
-            </button>
-            <button type="button" onClick={() => openExternal(ITCH_PAGE)}>
-              itch.io
-            </button>
-            <button type="button" onClick={() => openExternal(DISCORD_INVITE)}>
-              Discord
-            </button>
-            <button type="button" onClick={shareOnX}>
-              X
-            </button>
-          </div>
+          {plain ? (
+            <div className="title-share" role="group" aria-label="Community">
+              <button type="button" onClick={() => openExternal(DISCORD_INVITE)}>
+                Discord
+              </button>
+            </div>
+          ) : (
+            <div className="title-share" role="group" aria-label="Share this game">
+              <button type="button" onClick={() => void copyLink()}>
+                Copy link
+              </button>
+              <button type="button" onClick={() => openExternal(ITCH_PAGE)}>
+                itch.io
+              </button>
+              <button type="button" onClick={() => openExternal(DISCORD_INVITE)}>
+                Discord
+              </button>
+              <button type="button" onClick={shareOnX}>
+                X
+              </button>
+            </div>
+          )}
           {shareNote ? (
             <p className="title-note" role="status">
               {shareNote}
             </p>
           ) : null}
-          <a className="privacy-link" href={`${import.meta.env.BASE_URL}privacy.html`} target="_blank" rel="noopener noreferrer">
+          <a
+            className="privacy-link"
+            href={
+              plain
+                ? `${import.meta.env.BASE_URL}privacy.html?portal=crazygames`
+                : `${import.meta.env.BASE_URL}privacy.html`
+            }
+            target="_blank"
+            rel="noopener noreferrer"
+          >
             Privacy
           </a>
         </div>
@@ -207,7 +252,7 @@ export function Overlays({
           ) : null}
           <p className="keep-lvl">Keep Level {ui.keepLevel}</p>
           <p className="foe-brain-tease">
-            Foe intellect {ui.foeIntellect} · remembered {ui.foeGames} sieges
+            {plain ? foePlain(ui, true) : `Foe intellect ${ui.foeIntellect} · remembered ${ui.foeGames} sieges`}
           </p>
           {ui.missionId != null ? (
             <>

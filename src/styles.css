@@ -36,6 +36,15 @@ body {
   overscroll-behavior: none;
   -webkit-text-size-adjust: 100%;
   -webkit-tap-highlight-color: transparent;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+input,
+textarea,
+select {
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 button {
@@ -414,6 +423,37 @@ button:disabled {
 .hint-toast::before {
   content: "✦ ";
   color: var(--brass);
+}
+
+.field-lesson {
+  position: absolute;
+  z-index: 12;
+  top: 12px;
+  left: 12px;
+  width: min(260px, calc(100% - 24px));
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(201, 164, 90, 0.65);
+  background: rgba(14, 12, 18, 0.92);
+  color: #f3e7cf;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.45);
+  pointer-events: auto;
+}
+
+.field-lesson p {
+  margin: 0 0 8px;
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.field-lesson button {
+  border: 1px solid rgba(201, 164, 90, 0.7);
+  background: transparent;
+  color: #f3e7cf;
+  border-radius: 8px;
+  padding: 4px 10px;
+  min-height: 32px;
+  font-size: 13px;
 }
 
 @keyframes hint-in {
@@ -1801,6 +1841,19 @@ button:disabled {
 .title-actions .ghost {
   flex: 1 1 180px;
   margin-top: 8px;
+}
+
+.title-actions .play-main {
+  flex: 1 1 100%;
+  min-height: 56px;
+  font-size: 22px;
+  letter-spacing: 0.04em;
+}
+
+.title-actions.is-secondary .ghost {
+  flex: 1 1 120px;
+  min-height: 36px;
+  font-size: 14px;
 }
 
 .title-actions .tutorial-btn {

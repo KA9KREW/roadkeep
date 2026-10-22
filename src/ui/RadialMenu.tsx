@@ -19,10 +19,12 @@ interface RadialMenuProps {
   onDismiss: () => void;
   /** Auto-dismiss delay in ms. */
   ttl?: number;
+  /** CrazyGames reserves Escape. When false, Escape does not dismiss the ring. */
+  escapeKey?: boolean;
 }
 
 /** Compact contextual ring opened by a long-press. Dismisses on choice, outside tap, or timeout. */
-export function RadialMenu({ x, y, width, height, items, onDismiss, ttl = 4200 }: RadialMenuProps) {
+export function RadialMenu({ x, y, width, height, items, onDismiss, ttl = 4200, escapeKey = true }: RadialMenuProps) {
   const rootRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -33,7 +35,7 @@ export function RadialMenu({ x, y, width, height, items, onDismiss, ttl = 4200 }
     const onDown = (ev: PointerEvent) => {
       if (!rootRef.current?.contains(ev.target as Node)) onDismiss();
     };
-    window.addEventListener("keydown", onKey);
+    if (escapeKey) window.addEventListener("keydown", onKey);
     // Deferred so the long-press pointerup that opened us doesn't instantly close us.
     const arm = window.setTimeout(() => window.addEventListener("pointerdown", onDown, true), 50);
     return () => {
@@ -42,7 +44,7 @@ export function RadialMenu({ x, y, width, height, items, onDismiss, ttl = 4200 }
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("pointerdown", onDown, true);
     };
-  }, [onDismiss, ttl]);
+  }, [onDismiss, ttl, escapeKey]);
 
   const radius = 72;
   const pad = radius + 30;
