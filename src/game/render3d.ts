@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { BUILD_RANGE, STARTER_GUARD_RANGE, WORLD_H, WORLD_W } from "./balance";
 import { homeCameraFrame } from "./homeCamera";
 import { mapBounds } from "./map";
-import { cloneModel, ensureModelsLoaded, setSharedAnisotropy } from "./assets3d";
+import { cloneAnimatedModel, cloneModel, ensureModelsLoaded, setSharedAnisotropy } from "./assets3d";
 import type { Barricade, Building, GameState, Team, Unit } from "./types";
 import {
   buildScenery,
@@ -315,8 +315,15 @@ export class GameRenderer {
     this.fitCamera();
     this.applyTier(this.tier, false);
     void ensureModelsLoaded().then(() => {
-      // Force one remesh pass so trees and props pick up loaded models.
+      // Remesh so loaded models replace procedural fallbacks, including levies.
       this.lastMapId = "";
+      for (const key of [...this.entityMap.keys()]) {
+        if (!key.startsWith("unit-")) continue;
+        const obj = this.entityMap.get(key);
+        if (obj) this.dynamicRoot.remove(obj);
+        this.clearAnimation(key);
+        this.entityMap.delete(key);
+      }
     });
   }
 
@@ -1298,7 +1305,82 @@ export class GameRenderer {
   }
 
   private makeUnit(u: Unit) {
+    if (u.kind === "levy" || u.kind === "raider") {
+      const nomad = this.makeLevy(u.team);
+      if (nomad) return nomad;
+    }
     return buildUnitModel(u.kind, u.team);
+  }
+
+  /** Keep Mixamo hip translation from walking the mesh off its sim position. */
+  private lockHipRoot(clip: THREE.AnimationClip) {
+    if (clip.userData.hipLocked) return;
+    for (const track of clip.tracks) {
+      if (!track.name.toLowerCase().includes("hips") || !track.name.endsWith(".position")) continue;
+      const values = track.values;
+      const x = values[0];
+      const z = values[2];
+      for (let i = 0; i < values.length; i += 3) {
+        values[i] = x;
+        values[i + 2] = z;
+      }
+    }
+    clip.userData.hipLocked = true;
+  }
+
+  /** Desert nomad GLB. Running, Walking, and Thrust_Slash drive the mixer. */
+  private makeLevy(team: Team) {
+    const loaded = cloneAnimatedModel("levy", 12);
+    if (!loaded) return null;
+    const root = new THREE.Group();
+    const model = loaded.object;
+    model.traverse((o) => {
+      const mesh = o as THREE.Mesh;
+      if (!mesh.isMesh || !mesh.material) return;
+      const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      mesh.material = mats.map((mat) => {
+        const next = mat.clone();
+        if (team === "foe" && "color" in next) {
+          (next as THREE.MeshStandardMaterial).color.multiplyScalar(0.82);
+        }
+        return next;
+      });
+    });
+    root.add(model);
+    if (loaded.clips.length > 0) {
+      const mixer = new THREE.AnimationMixer(model);
+      const actions = new Map<string, THREE.AnimationAction>();
+      let walkClip: THREE.AnimationClip | undefined;
+      for (const clip of loaded.clips) {
+        this.lockHipRoot(clip);
+        const name = clip.name.toLowerCase();
+        const slot =
+          name.includes("attack") || name.includes("slash") || name.includes("thrust")
+            ? "attack"
+            : name.includes("run")
+              ? "run"
+              : name.includes("walk")
+                ? "walk"
+                : name.includes("idle")
+                  ? "idle"
+                  : "";
+        if (!slot || actions.has(slot)) continue;
+        if (slot === "walk") walkClip = clip;
+        actions.set(slot, mixer.clipAction(clip));
+      }
+      if (!actions.has("idle") && walkClip) {
+        const hold = walkClip.clone();
+        hold.name = "IdleHold";
+        const idle = mixer.clipAction(hold);
+        idle.timeScale = 0;
+        idle.time = 0;
+        actions.set("idle", idle);
+      }
+      const idle = actions.get("idle");
+      if (idle) idle.play();
+      root.userData.levyAnim = { mixer, clips: loaded.clips, actions, current: idle ? "idle" : undefined };
+    }
+    return root;
   }
 
   private syncUnits(state: GameState) {
@@ -1309,9 +1391,39 @@ export class GameRenderer {
       const obj = this.ensure(key, () => {
         const made = this.makeUnit(u);
         made.userData.ramBody = made.children.find((child) => child.userData.movingRamBody) ?? null;
+        const levyAnim = made.userData.levyAnim as
+          | {
+              mixer: THREE.AnimationMixer;
+              clips: THREE.AnimationClip[];
+              actions: Map<string, THREE.AnimationAction>;
+            }
+          | undefined;
+        if (levyAnim) {
+          this.animationMap.set(key, {
+            mixer: levyAnim.mixer,
+            clips: levyAnim.clips,
+            actions: levyAnim.actions,
+            root: made,
+            accum: 0,
+            frame: 0,
+          });
+        }
         return made;
       });
       setPos3(obj, u.pos.x, u.pos.y, 0);
+      const animated = this.animationMap.get(key);
+      if (animated) {
+        const prev = obj.userData.levyPos as { x: number; y: number } | undefined;
+        const moving = !!prev && Math.abs(prev.x - u.pos.x) + Math.abs(prev.y - u.pos.y) > 0.04;
+        obj.userData.levyPos = { x: u.pos.x, y: u.pos.y };
+        const slot = u.attackTimer > -0.35 ? "attack" : moving ? (animated.actions.has("run") ? "run" : "walk") : "idle";
+        if (animated.current !== slot && animated.actions.has(slot)) {
+          const next = animated.actions.get(slot)!;
+          if (animated.current) animated.actions.get(animated.current)?.fadeOut(0.15);
+          next.reset().fadeIn(0.15).play();
+          animated.current = slot;
+        }
+      }
       // Face march direction
       obj.rotation.y = u.team === "you" ? Math.PI : 0;
       if (u.kind === "rammer") {

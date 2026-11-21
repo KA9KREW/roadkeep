@@ -33,7 +33,8 @@ export type ModelKey =
   | "kCharB"
   | "kCharC"
   | "horse"
-  | "knight";
+  | "knight"
+  | "levy";
 
 const asset = (path: string) => `${import.meta.env.BASE_URL}${path}`;
 
@@ -70,6 +71,7 @@ const URLS: Record<ModelKey, string> = {
   // Same file as `hero`, loaded without its KTX2 textures so it does not need a
   // basis transcoder. Team armor is painted on the clone.
   knight: asset("models/player-hero.glb"),
+  levy: asset("models/levy-nomad.glb"),
 };
 
 interface ModelTemplate {
@@ -253,7 +255,8 @@ function prep(root: THREE.Object3D, key: ModelKey, cast = true) {
       // Castle kit is authored double-sided. Forcing FrontSide turns the far
       // side into a hollow shell as soon as the camera orbits. The horse and the
       // solid knight are flat-colored; keep both sides so thin parts don't vanish.
-      if (key === "horse" || key === "knight") mat.side = THREE.DoubleSide;
+      if (key === "horse" || key === "knight" || key === "levy") mat.side = THREE.DoubleSide;
+      if (key === "levy") continue;
       else if (mat.side !== THREE.DoubleSide) mat.side = THREE.FrontSide;
       if ("metalness" in mat) {
         const std = mat as THREE.MeshStandardMaterial;
@@ -277,7 +280,7 @@ function prep(root: THREE.Object3D, key: ModelKey, cast = true) {
     }
     // Horse and knight bring their own colors. The atlas pass is for Kenney
     // nature and castle meshes that ship without an albedo.
-    if (colormap && key !== "horse" && key !== "knight") skinWithColormap(m, key, colormap);
+    if (colormap && key !== "horse" && key !== "knight" && key !== "levy") skinWithColormap(m, key, colormap);
   });
   return root;
 }
@@ -313,10 +316,11 @@ export function cloneAnimatedModel(
   if (!template) return null;
   // Skinned meshes (the horse) keep the source skeleton if cloned with
   // Object3D.clone, so the mount renders as a speck. SkeletonUtils retargets.
-  const object = key === "horse" ? cloneSkinned(template.root) : template.root.clone(true);
+  const skinned = key === "horse" || key === "levy";
+  const object = skinned ? cloneSkinned(template.root) : template.root.clone(true);
   // The skinned clone's matrices are stale until a full update, and a fit
   // against that box shrinks the horse to a speck.
-  if (key === "horse") object.updateMatrixWorld(true);
+  if (skinned) object.updateMatrixWorld(true);
   if (targetH != null) fitModel(object, targetH);
   return { object, clips: template.clips };
 }
