@@ -1306,8 +1306,8 @@ export class GameRenderer {
 
   private makeUnit(u: Unit) {
     if (u.kind === "levy" || u.kind === "raider") {
-      const nomad = this.makeLevy(u.team);
-      if (nomad) return nomad;
+      const levy = this.makeLevy(u.team);
+      if (levy) return levy;
     }
     return buildUnitModel(u.kind, u.team);
   }
