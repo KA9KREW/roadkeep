@@ -256,8 +256,28 @@ function prep(root: THREE.Object3D, key: ModelKey, cast = true) {
       // side into a hollow shell as soon as the camera orbits. The horse and the
       // solid knight are flat-colored; keep both sides so thin parts don't vanish.
       if (key === "horse" || key === "knight" || key === "levy") mat.side = THREE.DoubleSide;
-      if (key === "levy") continue;
-      else if (mat.side !== THREE.DoubleSide) mat.side = THREE.FrontSide;
+      if (key === "levy" && "metalness" in mat) {
+        const std = mat as THREE.MeshStandardMaterial;
+        // The baked metalness map is fully metal and there is no environment
+        // light, so the nomad rendered as black.
+        std.metalness = 0;
+        std.roughness = 0.78;
+        std.metalnessMap = null;
+        std.roughnessMap = null;
+        std.normalMap = null;
+        std.envMapIntensity = 0;
+        std.transparent = false;
+        std.opacity = 1;
+        std.depthWrite = true;
+        if (std.map) {
+          std.map.colorSpace = THREE.SRGBColorSpace;
+          std.color.set(0xffffff);
+        } else {
+          std.color.set(0xc2a36b);
+        }
+        continue;
+      }
+      if (mat.side !== THREE.DoubleSide) mat.side = THREE.FrontSide;
       if ("metalness" in mat) {
         const std = mat as THREE.MeshStandardMaterial;
         const name = std.name.toLowerCase();
@@ -321,9 +341,6 @@ export function cloneAnimatedModel(
   // The skinned clone's matrices are stale until a full update, and a fit
   // against that box shrinks the horse to a speck.
   if (skinned) object.updateMatrixWorld(true);
-  // Mixamo writes the character in centimeters and scales the armature by 0.01.
-  // The skinned bounds ignore that scale, so fitting them leaves a speck.
-  if (key === "levy") object.scale.set(1, 1, 1);
   if (targetH != null) fitModel(object, targetH);
   return { object, clips: template.clips };
 }
