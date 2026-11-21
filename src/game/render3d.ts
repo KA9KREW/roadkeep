@@ -1338,14 +1338,15 @@ export class GameRenderer {
       const mesh = o as THREE.Mesh;
       if (!mesh.isMesh || !mesh.material) return;
       mesh.frustumCulled = false;
-      const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-      mesh.material = mats.map((mat) => {
+      const tint = (mat: THREE.Material) => {
         const next = mat.clone();
         if (team === "foe" && "color" in next) {
           (next as THREE.MeshStandardMaterial).color.multiplyScalar(0.82);
         }
         return next;
-      });
+      };
+      // A material array on a mesh without geometry groups draws nothing.
+      mesh.material = Array.isArray(mesh.material) ? mesh.material.map(tint) : tint(mesh.material);
     });
     root.add(model);
     if (loaded.clips.length > 0) {
