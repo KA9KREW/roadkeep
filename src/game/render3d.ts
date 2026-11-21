@@ -1337,6 +1337,7 @@ export class GameRenderer {
     model.traverse((o) => {
       const mesh = o as THREE.Mesh;
       if (!mesh.isMesh || !mesh.material) return;
+      mesh.frustumCulled = false;
       const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
       mesh.material = mats.map((mat) => {
         const next = mat.clone();
