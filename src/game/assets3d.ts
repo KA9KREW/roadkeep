@@ -321,6 +321,9 @@ export function cloneAnimatedModel(
   // The skinned clone's matrices are stale until a full update, and a fit
   // against that box shrinks the horse to a speck.
   if (skinned) object.updateMatrixWorld(true);
+  // Mixamo writes the character in centimeters and scales the armature by 0.01.
+  // The skinned bounds ignore that scale, so fitting them leaves a speck.
+  if (key === "levy") object.scale.set(1, 1, 1);
   if (targetH != null) fitModel(object, targetH);
   return { object, clips: template.clips };
 }
