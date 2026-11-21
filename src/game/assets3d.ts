@@ -71,7 +71,7 @@ const URLS: Record<ModelKey, string> = {
   // Same file as `hero`, loaded without its KTX2 textures so it does not need a
   // basis transcoder. Team armor is painted on the clone.
   knight: asset("models/player-hero.glb"),
-  levy: asset("models/levy-nomad.glb"),
+  levy: asset("models/levy.glb"),
 };
 
 interface ModelTemplate {
